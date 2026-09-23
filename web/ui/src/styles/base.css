@@ -1,0 +1,46 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100vh;
+}
+
+body {
+  font-family: var(--font-main);
+  color: var(--text);
+  background:
+    radial-gradient(900px 450px at 0% -10%, rgba(87, 130, 255, 0.12), transparent),
+    var(--bg);
+}
+
+.muted {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.error-banner {
+  margin-top: 10px;
+  border: 1px solid rgba(230, 90, 112, 0.35);
+  background: rgba(220, 68, 98, 0.12);
+  color: var(--bad);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.error-text {
+  font-size: 12px;
+  color: var(--bad);
+}
+
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}

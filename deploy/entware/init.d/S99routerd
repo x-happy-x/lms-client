@@ -1,0 +1,129 @@
+#!/opt/bin/sh
+
+ENABLED=yes
+PROC=/opt/routerd/bin/routerd
+PROC_NAME=routerd
+ARGS="-config /opt/routerd/config/config.yml"
+PIDFILE=/opt/var/run/routerd.pid
+LOGFILE=/opt/var/log/routerd.log
+PATH=/opt/sbin:/opt/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+is_running() {
+    if [ -f "$PIDFILE" ]; then
+        PID="$(cat "$PIDFILE" 2>/dev/null)"
+        if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    pidof "$PROC_NAME" >/dev/null 2>&1
+}
+
+write_pidfile() {
+    PID="$(pidof "$PROC_NAME" 2>/dev/null | awk '{print $1}')"
+    if [ -n "$PID" ]; then
+        mkdir -p "$(dirname "$PIDFILE")"
+        echo "$PID" > "$PIDFILE"
+        return 0
+    fi
+    return 1
+}
+
+start_service() {
+    if [ "$ENABLED" != "yes" ]; then
+        echo "routerd is disabled"
+        return 1
+    fi
+    if is_running; then
+        write_pidfile >/dev/null 2>&1 || true
+        echo "routerd already running"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$PIDFILE")" "$(dirname "$LOGFILE")"
+    nohup "$PROC" $ARGS >>"$LOGFILE" 2>&1 &
+    PID=$!
+    echo "$PID" > "$PIDFILE"
+
+    COUNTER=0
+    LIMIT=15
+    while [ "$COUNTER" -lt "$LIMIT" ]; do
+        if kill -0 "$PID" 2>/dev/null; then
+            write_pidfile >/dev/null 2>&1 || true
+            echo "routerd started"
+            return 0
+        fi
+        sleep 1
+        COUNTER=$((COUNTER + 1))
+    done
+
+    echo "routerd failed to start"
+    return 1
+}
+
+stop_service() {
+    if ! is_running; then
+        rm -f "$PIDFILE"
+        echo "routerd already stopped"
+        return 0
+    fi
+
+    PID="$(cat "$PIDFILE" 2>/dev/null)"
+    if [ -n "$PID" ]; then
+        kill "$PID" 2>/dev/null || true
+    else
+        killall "$PROC_NAME" 2>/dev/null || true
+    fi
+
+    COUNTER=0
+    LIMIT=15
+    while [ "$COUNTER" -lt "$LIMIT" ]; do
+        if ! is_running; then
+            rm -f "$PIDFILE"
+            echo "routerd stopped"
+            return 0
+        fi
+        sleep 1
+        COUNTER=$((COUNTER + 1))
+    done
+
+    killall -9 "$PROC_NAME" 2>/dev/null || true
+    sleep 1
+    if is_running; then
+        echo "routerd failed to stop"
+        return 1
+    fi
+
+    rm -f "$PIDFILE"
+    echo "routerd stopped"
+    return 0
+}
+
+status_service() {
+    if is_running; then
+        write_pidfile >/dev/null 2>&1 || true
+        echo "routerd is running"
+        return 0
+    fi
+    echo "routerd is stopped"
+    return 1
+}
+
+case "$1" in
+    start)
+        start_service
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        stop_service || true
+        start_service
+        ;;
+    status|check)
+        status_service
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status|check}"
+        exit 1
+        ;;
+esac

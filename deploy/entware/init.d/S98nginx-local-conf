@@ -1,0 +1,63 @@
+#!/bin/sh
+set -eu
+
+NGINX_CONF="${NGINX_CONF:-/tmp/nginx/nginx.conf}"
+LOCAL_CONF_DIR="${LOCAL_CONF_DIR:-/opt/etc/nginx/conf.d}"
+LOCAL_SITES_DIR="${LOCAL_SITES_DIR:-/opt/etc/nginx/sites-enabled}"
+MARKER="# xkeen-net local service includes"
+INCLUDE_LINE="include ${LOCAL_CONF_DIR}/*.conf;"
+SITES_INCLUDE_LINE="include ${LOCAL_SITES_DIR}/*.conf;"
+
+patch_nginx_conf() {
+  [ -f "$NGINX_CONF" ] || {
+    echo "nginx config not found: $NGINX_CONF" >&2
+    return 1
+  }
+  mkdir -p "$LOCAL_CONF_DIR" "$LOCAL_SITES_DIR" /opt/var/log/nginx
+  tmp="${NGINX_CONF}.local-conf.$$"
+  awk -v marker="$MARKER" -v include_line="$INCLUDE_LINE" -v sites_include_line="$SITES_INCLUDE_LINE" '
+    index($0, marker) { next }
+    index($0, include_line) { next }
+    index($0, sites_include_line) { next }
+    /^[[:space:]]*map_hash_max_size[[:space:]]+/ && !inserted {
+      print
+      print "  " marker
+      print "  " include_line
+      print "  " sites_include_line
+      inserted = 1
+      next
+    }
+    { print }
+  ' "$NGINX_CONF" > "$tmp"
+  mv "$tmp" "$NGINX_CONF"
+}
+
+reload_nginx() {
+  if ! command -v nginx >/dev/null 2>&1; then
+    echo "nginx binary not found" >&2
+    return 1
+  fi
+  nginx -t
+  nginx -s reload || nginx
+}
+
+case "${1:-start}" in
+  start|restart|reload)
+    patch_nginx_conf
+    reload_nginx
+    ;;
+  stop)
+    ;;
+  status)
+    if grep -Fq "$MARKER" "$NGINX_CONF" 2>/dev/null; then
+      echo "local nginx conf include is active"
+      exit 0
+    fi
+    echo "local nginx conf include is missing"
+    exit 1
+    ;;
+  *)
+    echo "Usage: $0 {start|restart|reload|stop|status}"
+    exit 2
+    ;;
+esac

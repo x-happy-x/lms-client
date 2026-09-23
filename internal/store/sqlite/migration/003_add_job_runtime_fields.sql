@@ -1,0 +1,4 @@
+ALTER TABLE jobs ADD COLUMN started_at TEXT;
+ALTER TABLE jobs ADD COLUMN finished_at TEXT;
+ALTER TABLE jobs ADD COLUMN total_bytes INTEGER;
+ALTER TABLE jobs ADD COLUMN output_size_bytes INTEGER;

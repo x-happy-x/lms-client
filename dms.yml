@@ -1,0 +1,68 @@
+version: "1"
+app: lms-client
+
+target:
+  host: 192.168.1.1
+  user: root
+  port: 222
+  password_env: DMS_ROUTER_PASSWORD
+  remote_bin: /opt/bin/dms-service
+  root: /opt/dms
+
+build:
+  - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o build/routerd ./cmd/routerd
+  - npm run build --prefix web/ui
+
+artifacts:
+  - source: build/routerd
+    destination: /opt/routerd/bin/routerd
+    mode: 0755
+  - source: deploy/config.example.yml
+    destination: /opt/routerd/config/config.yml
+    mode: 0644
+  - source: deploy/entware/init.d/S99routerd
+    destination: /opt/routerd/init.d/S99routerd
+    mode: 0755
+  - source: web/ui/dist
+    destination: /opt/routerd/static
+    mode: 0755
+
+service:
+  init_source: /opt/routerd/init.d/S99routerd
+  init_name: S99routerd
+  action: restart
+
+healthcheck:
+  url: http://127.0.0.1:18080/api/ui/system/health
+  attempts: 10
+  interval: 1s
+
+nginx:
+  routes_path: /opt/etc/homenet/nginx/routes.yml
+  apply_command: /opt/bin/homenet apply
+  apps:
+    - id: lms-client
+      name: LMS
+      upstream:
+        address: 127.0.0.1
+        port: 18080
+        scheme: http
+  hosts:
+    - host: lms.local
+      kind: private
+      app_id: lms-client
+      verify_upstream_ssl: false
+      dns:
+        publish: [local]
+        local_record_ip: 192.168.1.2
+      tls:
+        cert_policy: off
+        cert_ref: none
+        san: []
+      endpoints:
+        - name: web
+          listen:
+            protocol: http
+            port: 80
+          behavior:
+            redirect: off

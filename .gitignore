@@ -1,0 +1,6 @@
+/build/
+/web/ui/dist/
+node_modules/
+*.db
+scripts/*.env
+.idea/workspace.xml

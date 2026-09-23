@@ -1,0 +1,19 @@
+server:
+  listen: 127.0.0.1:18080
+
+database:
+  path: /opt/routerd/data/router.db
+  busy_timeout_ms: 5000
+
+scheduler:
+  poll_interval: 10s
+  max_parallel_dispatch: 2
+
+selection:
+  mode: auto # auto|manual
+
+auth:
+  ui_basic_enabled: false
+
+logging:
+  level: info
