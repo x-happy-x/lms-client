@@ -89,7 +89,7 @@ func (h *Handler) streamJobOutput(w http.ResponseWriter, r *http.Request, jobID 
 			w.Header().Set(name, value)
 		}
 	}
-	fileName := resp.Header.Get("X-File-Name")
+	fileName := nodes.DecodeFileName(resp.Header.Get("X-File-Name"))
 	if fileName == "" && job.OutputPath != nil {
 		fileName = path.Base(*job.OutputPath)
 	}

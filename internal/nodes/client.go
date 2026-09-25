@@ -180,7 +180,7 @@ func (c *Client) DownloadJobOutput(ctx context.Context, node domain.Node, remote
 	if err != nil {
 		return nil, "", err
 	}
-	fileName := resp.Header.Get("X-File-Name")
+	fileName := DecodeFileName(resp.Header.Get("X-File-Name"))
 	if strings.TrimSpace(fileName) == "" {
 		fileName = remoteJobID + ".bin"
 	}
@@ -475,4 +475,13 @@ func newStreamClient(headerTimeout time.Duration) *http.Client {
 	}
 	transport.ResponseHeaderTimeout = headerTimeout
 	return &http.Client{Transport: transport}
+}
+
+// DecodeFileName reads the node's X-File-Name header: percent-encoded UTF-8 in current
+// nodes, a raw name in older ones.
+func DecodeFileName(value string) string {
+	if decoded, err := url.PathUnescape(value); err == nil {
+		return decoded
+	}
+	return value
 }

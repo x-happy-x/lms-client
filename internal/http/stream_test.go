@@ -35,7 +35,7 @@ func (s *fileStubNodeClient) OpenJobOutput(_ context.Context, _ domain.Node, _ s
 	}
 	rec := httptest.NewRecorder()
 	rec.Header().Set("Content-Type", "application/octet-stream")
-	rec.Header().Set("X-File-Name", "отпуск 2026.jpg")
+	rec.Header().Set("X-File-Name", "%D0%BE%D1%82%D0%BF%D1%83%D1%81%D0%BA%202026.jpg")
 	http.ServeContent(rec, req, "", time.Unix(1700000000, 0), strings.NewReader(streamPayload))
 	return rec.Result(), nil
 }
