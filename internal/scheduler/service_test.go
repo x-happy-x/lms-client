@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
@@ -58,6 +59,12 @@ func (f fakeNodeClient) PreflightJob(context.Context, domain.Node, string) (doma
 }
 func (f fakeNodeClient) DownloadJobOutput(context.Context, domain.Node, string) (io.ReadCloser, string, error) {
 	return nil, "", errors.New("unexpected")
+}
+func (f fakeNodeClient) OpenJobOutput(context.Context, domain.Node, string, map[string]string) (*http.Response, error) {
+	return nil, errors.New("unexpected")
+}
+func (f fakeNodeClient) OpenJobPreview(context.Context, domain.Node, string) (*http.Response, error) {
+	return nil, errors.New("unexpected")
 }
 func (f fakeNodeClient) UploadFile(context.Context, domain.Node, *string, string, io.Reader) (domain.NodeUploadResponse, error) {
 	return domain.NodeUploadResponse{}, errors.New("unexpected")
