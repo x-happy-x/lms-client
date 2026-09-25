@@ -36,8 +36,8 @@ func TestRunMigrationsIsIdempotent(t *testing.T) {
 	if err := db.SQL.QueryRowContext(ctx, "SELECT COUNT(1) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
-	if count != 3 {
-		t.Fatalf("expected 3 migration rows, got %d", count)
+	if count != 4 {
+		t.Fatalf("expected 4 migration rows, got %d", count)
 	}
 
 	if _, err := db.SQL.ExecContext(ctx, "INSERT INTO jobs (id, created_at, updated_at, type, url, status) VALUES ('j1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'DIRECT', 'https://example.com/file.bin', 'QUEUED')"); err != nil {

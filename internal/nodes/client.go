@@ -113,6 +113,15 @@ func (c *Client) RetryJob(ctx context.Context, node domain.Node, remoteJobID str
 	return result, nil
 }
 
+func (c *Client) SetSpeedLimit(ctx context.Context, node domain.Node, remoteJobID string, maxSpeedBytes *int64) (domain.NodeJobStatusResponse, error) {
+	var result domain.NodeJobStatusResponse
+	req := map[string]any{"maxSpeedBytes": maxSpeedBytes}
+	if err := c.callJSON(ctx, node, http.MethodPost, "/api/jobs/"+remoteJobID+"/speed", req, &result); err != nil {
+		return domain.NodeJobStatusResponse{}, err
+	}
+	return result, nil
+}
+
 func (c *Client) MoveJobOutput(ctx context.Context, node domain.Node, remoteJobID string, storagePath *string) (domain.NodeJobStatusResponse, error) {
 	var result domain.NodeJobStatusResponse
 	req := map[string]any{"storagePath": storagePath}

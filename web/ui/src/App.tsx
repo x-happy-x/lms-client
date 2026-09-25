@@ -25,7 +25,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: IconName }> = [
 ]
 
 type Viewer = { list: Job[]; index: number } | null
-type JobDialog = { kind: 'url' | 'move'; job: Job } | null
+type JobDialog = { kind: 'url' | 'move' | 'speed'; job: Job } | null
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('jobs')
@@ -71,6 +71,7 @@ export default function App() {
       },
       editUrl: (job) => setDialog({ kind: 'url', job }),
       move: (job) => setDialog({ kind: 'move', job }),
+      speed: (job) => setDialog({ kind: 'speed', job }),
       open: (job) => {
         const list = jobs.filter(isViewableMedia)
         setViewer({ list, index: Math.max(0, list.findIndex((item) => item.id === job.id)) })
