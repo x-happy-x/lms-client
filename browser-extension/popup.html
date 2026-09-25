@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>LMS</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="popup">
+    <header class="bar">
+      <img src="icons/icon32.png" alt="" width="20" height="20" />
+      <strong>LMS</strong>
+      <span id="status" class="pill muted">…</span>
+      <span class="grow"></span>
+      <button id="open-ui" class="icon" title="Открыть LMS">↗</button>
+      <button id="open-options" class="icon" title="Настройки">⚙</button>
+    </header>
+
+    <section id="setup" class="notice" hidden>
+      Укажите адрес LMS на роутере в <a href="#" id="setup-link">настройках</a>.
+    </section>
+
+    <section class="page">
+      <div class="page-title" id="page-title"></div>
+      <div class="row">
+        <button id="send-page" class="btn">Отправить страницу (yt-dlp)</button>
+        <label class="speed" title="Ограничение скорости для отправки">
+          <select id="speed">
+            <option value="0">Без лимита</option>
+            <option value="1048576">1 МБ/с</option>
+            <option value="5242880">5 МБ/с</option>
+            <option value="10485760">10 МБ/с</option>
+            <option value="26214400">25 МБ/с</option>
+            <option value="52428800">50 МБ/с</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <form id="quick" class="row quick">
+      <input id="quick-url" type="text" placeholder="Ссылка или magnet:" autocomplete="off" />
+      <button class="btn primary" type="submit">В LMS</button>
+    </form>
+
+    <h2 class="section-title">На странице <span id="count" class="muted"></span></h2>
+    <ul id="items" class="items"></ul>
+    <p id="empty" class="empty muted" hidden>Видео, файлов и magnet-ссылок не найдено. Запустите видео — плеер часто подгружает поток только при воспроизведении.</p>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

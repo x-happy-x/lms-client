@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>LMS — настройки</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="options">
+    <main>
+      <h1><img src="icons/icon48.png" alt="" width="32" height="32" /> LMS — настройки</h1>
+
+      <section class="card">
+        <h2>Роутер</h2>
+        <label class="field">
+          <span>Адрес веб-интерфейса LMS</span>
+          <input id="routerUrl" type="text" placeholder="192.168.1.1:8082" autocomplete="off" />
+        </label>
+        <p class="hint muted">У <code>/api/ui</code> нет авторизации. Если LMS доступен через прокси с паролем — укажите логин и пароль (HTTP Basic).</p>
+        <div class="grid2">
+          <label class="field"><span>Логин</span><input id="username" type="text" autocomplete="off" /></label>
+          <label class="field"><span>Пароль</span><input id="password" type="password" autocomplete="off" /></label>
+        </div>
+        <div class="row">
+          <button id="test" class="btn">Проверить связь</button>
+          <span id="test-result" class="result"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Перехват загрузок</h2>
+        <label class="check"><input id="interceptDownloads" type="checkbox" /> Отправлять загрузки браузера в LMS вместо скачивания</label>
+        <div class="kinds" id="interceptKinds">
+          <label class="check"><input type="checkbox" value="video" /> Видео</label>
+          <label class="check"><input type="checkbox" value="audio" /> Аудио</label>
+          <label class="check"><input type="checkbox" value="archive" /> Архивы</label>
+          <label class="check"><input type="checkbox" value="disk" /> Образы дисков</label>
+          <label class="check"><input type="checkbox" value="app" /> Программы</label>
+          <label class="check"><input type="checkbox" value="torrent" /> .torrent</label>
+          <label class="check"><input type="checkbox" value="document" /> Документы</label>
+          <label class="check"><input type="checkbox" value="image" /> Изображения</label>
+          <label class="check"><input type="checkbox" value="file" /> Прочие файлы</label>
+        </div>
+        <label class="field narrow">
+          <span>Не трогать файлы меньше, МБ (если размер известен)</span>
+          <input id="interceptMinMb" type="number" min="0" step="1" />
+        </label>
+        <p class="hint muted">Если LMS недоступен, файл скачивается браузером как обычно. Файлы, которым нужна авторизация на сайте (cookies), нода скачать не сможет — для них в уведомлении есть кнопка «Скачать в браузере».</p>
+        <label class="check"><input id="interceptMagnets" type="checkbox" /> Открывать magnet-ссылки через LMS</label>
+        <label class="check"><input id="sniffMedia" type="checkbox" /> Находить видеопотоки (HLS/DASH) в сетевых запросах страницы</label>
+      </section>
+
+      <section class="card">
+        <h2>Загрузки</h2>
+        <label class="field narrow">
+          <span>Ограничение скорости по умолчанию</span>
+          <select id="maxSpeedBytes">
+            <option value="0">Без лимита</option>
+            <option value="1048576">1 МБ/с</option>
+            <option value="5242880">5 МБ/с</option>
+            <option value="10485760">10 МБ/с</option>
+            <option value="26214400">25 МБ/с</option>
+            <option value="52428800">50 МБ/с</option>
+          </select>
+        </label>
+        <label class="check"><input id="notifications" type="checkbox" /> Показывать уведомления</label>
+      </section>
+
+      <p id="saved" class="muted small">Изменения сохраняются сразу.</p>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

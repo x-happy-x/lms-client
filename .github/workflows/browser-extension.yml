@@ -1,0 +1,44 @@
+name: Browser extension
+
+on:
+  push:
+    branches: [master]
+    paths: ['browser-extension/**', '.github/workflows/browser-extension.yml']
+  pull_request:
+    paths: ['browser-extension/**', '.github/workflows/browser-extension.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: browser-extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test
+        run: npm test
+      - name: Pack
+        run: |
+          version=$(node -p "require('./manifest.json').version")
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          zip -r ../lms-extension.zip manifest.json background.js content.js popup.html popup.js options.html options.js ui.css lib icons
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lms-extension
+          path: lms-extension.zip
+      - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="extension-v${VERSION}.${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" ../lms-extension.zip --target "$GITHUB_SHA" \
+            --title "Расширение LMS ${VERSION}.${GITHUB_RUN_NUMBER}" \
+            --notes "Распакуйте архив и загрузите папку на chrome://extensions (режим разработчика → «Загрузить распакованное»)."
