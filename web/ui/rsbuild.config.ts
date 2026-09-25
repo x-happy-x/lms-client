@@ -12,6 +12,6 @@ export default defineConfig({
     }
   },
   html: {
-    title: 'LMS Client'
+    title: 'LMS — загрузки'
   }
 })
