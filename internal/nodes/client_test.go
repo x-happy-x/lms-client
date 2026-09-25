@@ -205,3 +205,52 @@ func verifyRequest(t *testing.T, r *http.Request, secret string, expectedTimesta
 	expectedSig := hex.EncodeToString(m.Sum(nil))
 	return hmac.Equal([]byte(expectedSig), []byte(signature))
 }
+
+func TestOpenJobOutputPassesThroughRangeResponses(t *testing.T) {
+	t.Parallel()
+
+	payload := "0123456789"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Signature") == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("X-File-Name", "a.bin")
+		http.ServeContent(w, r, "a.bin", time.Unix(1, 0), strings.NewReader(payload))
+	}))
+	defer server.Close()
+
+	c := NewClient(ClientConfig{DefaultTimeout: 50 * time.Millisecond, MaxAttempts: 1})
+	node := domain.Node{BaseURL: server.URL, ClientID: "router-main", Secret: "s"}
+
+	resp, err := c.OpenJobOutput(context.Background(), node, "remote-1", map[string]string{"Range": "bytes=4-"})
+	if err != nil {
+		t.Fatalf("open output: %v", err)
+	}
+	body := make([]byte, 16)
+	n, _ := resp.Body.Read(body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent || string(body[:n]) != "456789" {
+		t.Fatalf("expected 206 with tail, got %d %q", resp.StatusCode, body[:n])
+	}
+
+	resp, err = c.OpenJobOutput(context.Background(), node, "remote-1", map[string]string{"Range": "bytes=99-"})
+	if err != nil {
+		t.Fatalf("416 must be passed through, got error %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("expected 416, got %d", resp.StatusCode)
+	}
+}
+
+func TestStreamClientHasNoWholeResponseTimeout(t *testing.T) {
+	t.Parallel()
+	c := NewClient(ClientConfig{DefaultTimeout: time.Second})
+	if c.streamClient.Timeout != 0 {
+		t.Fatalf("stream client must not limit total transfer time, got %v", c.streamClient.Timeout)
+	}
+	if c.streamClient.Transport.(*http.Transport).ResponseHeaderTimeout < 30*time.Second {
+		t.Fatalf("header timeout should be at least 30s")
+	}
+}

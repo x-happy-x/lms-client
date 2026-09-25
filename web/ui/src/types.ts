@@ -1,5 +1,5 @@
-export type TabKey = 'jobs' | 'nodes' | 'profiles' | 'settings'
-export type ThemeMode = 'claude-dark' | 'claude'
+export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'settings'
+export type ThemeMode = 'system' | 'light' | 'dark'
 
 export type JobStatus = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'DONE' | 'ERROR' | 'CANCELED'
 
@@ -101,12 +101,4 @@ export type JobPreflightResponse = {
   url: string
   bestNodeId?: string
   nodes: JobPreflightNode[]
-}
-
-export type IconRule = {
-  id: string
-  label: string
-  icon: string
-  pattern: string
-  enabled: boolean
 }

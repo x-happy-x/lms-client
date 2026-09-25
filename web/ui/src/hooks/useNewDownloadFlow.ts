@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
-import type { JobPreflightResponse, NodeItem, Profile, StorageTarget } from '../types'
+import type { JobPreflightResponse, StorageTarget } from '../types'
 
 export type NewJobFormState = {
   type: string
@@ -28,8 +28,14 @@ function withOptional(value: string): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\/.+/i.test(value.trim())
+function isSupportedUrl(value: string): boolean {
+  return /^(https?:\/\/|magnet:\?).+/i.test(value.trim())
+}
+
+/** First http(s)/magnet link in pasted text (e.g. a shared message). */
+export function extractLink(text: string): string {
+  const match = text.match(/(magnet:\?[^\s"'<>]+|https?:\/\/[^\s"'<>]+)/i)
+  return match ? match[1].replace(/[.,;:!?)\]]+$/, '') : text.trim()
 }
 
 export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlowParams) {
@@ -42,21 +48,27 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
   const [targetsLoading, setTargetsLoading] = useState(false)
   const [targetsError, setTargetsError] = useState('')
   const [nodeSelectionTouched, setNodeSelectionTouched] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const selectedNode = useMemo(() => {
     if (!preflight || !value.nodeId) return null
     return preflight.nodes.find((node) => node.nodeId === value.nodeId) ?? null
   }, [preflight, value.nodeId])
 
-  const openModal = async () => {
+  const openModal = async (initialUrl?: string) => {
     setOpen(true)
+    if (initialUrl) {
+      setValue((current) => ({ ...current, url: initialUrl }))
+      return
+    }
     setError('')
     if (value.url.trim() !== '' || typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
       return
     }
     try {
-      const text = (await navigator.clipboard.readText()).trim()
-      if (isHttpUrl(text)) {
+      const text = extractLink(await navigator.clipboard.readText())
+      if (isSupportedUrl(text)) {
         setValue((current) => ({ ...current, url: text }))
       }
     } catch {
@@ -74,6 +86,7 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
     setTargetsLoading(false)
     setTargetsError('')
     setNodeSelectionTouched(false)
+    setSubmitError('')
   }
 
   const onChange = (next: NewJobFormState) => {
@@ -89,9 +102,9 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
   useEffect(() => {
     if (!open) return
     const url = value.url.trim()
-    if (!isHttpUrl(url)) {
+    if (!isSupportedUrl(url)) {
       setPreflight(null)
-      setPreflightError(url ? 'URL must start with http:// or https://' : '')
+      setPreflightError(url ? 'Нужна ссылка http://, https:// или magnet:?' : '')
       setTargets([])
       setTargetsError('')
       return
@@ -101,7 +114,7 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
       try {
         setPreflightLoading(true)
         setPreflightError('')
-        const response = await api.preflightJob({ url })
+        const response = await api.preflightJob(url)
         setPreflight(response)
 
         const candidateNodeId = nodeSelectionTouched && response.nodes.some((node) => node.nodeId === value.nodeId)
@@ -162,6 +175,8 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
   }, [open, value.nodeId, selectedNode])
 
   const submit = async (startImmediately: boolean) => {
+    setSubmitting(true)
+    setSubmitError('')
     try {
       await api.createJob({
         type: value.type,
@@ -175,7 +190,9 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
       setError('')
       await refreshJobs()
     } catch (err) {
-      setError((err as Error).message)
+      setSubmitError((err as Error).message)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -192,6 +209,8 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
     selectedNode,
     targets,
     targetsLoading,
-    targetsError
+    targetsError,
+    submitting,
+    submitError
   }
 }

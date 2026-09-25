@@ -270,8 +270,8 @@ func (h *Handler) preflightJob(w http.ResponseWriter, r *http.Request) {
 		h.badRequest(w, "url is required")
 		return
 	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		h.badRequest(w, "url must start with http:// or https://")
+	if err := domain.ValidateJobURL("", req.URL); err != nil {
+		h.badRequest(w, err.Error())
 		return
 	}
 
@@ -298,7 +298,23 @@ func (h *Handler) preflightJob(w http.ResponseWriter, r *http.Request) {
 			Options:        []jobPreflightNodeOptionResponse{},
 		}
 
-		if status == "online" {
+		if status == "online" && domain.IsMagnetURL(req.URL) {
+			// Nodes cannot probe magnet links over HTTP: offer TORRENT on every online node.
+			torrent := string(domain.JobTypeTorrent)
+			item.RecommendedType = torrent
+			item.SupportedTypes = []string{torrent}
+			item.Options = append(item.Options, jobPreflightNodeOptionResponse{
+				Type:              torrent,
+				Supported:         true,
+				ResumeSupported:   true,
+				SegmentedPossible: true,
+				Message:           "magnet link: size is known after metadata is fetched",
+			})
+			if item.PingMs != nil && (bestNodeID == nil || *item.PingMs < bestPing) {
+				bestPing = *item.PingMs
+				bestNodeID = &item.NodeID
+			}
+		} else if status == "online" {
 			started := time.Now()
 			resp, preflightErr := h.nodeClient.PreflightJob(r.Context(), node, req.URL)
 			if preflightErr != nil {
@@ -402,6 +418,21 @@ func (h *Handler) jobsByID(w http.ResponseWriter, r *http.Request) {
 		jobID := strings.TrimSuffix(rest, "/move")
 		jobID = strings.TrimSuffix(jobID, "/")
 		h.moveJob(w, r, jobID)
+		return
+	}
+	if strings.HasSuffix(rest, "/file") || strings.HasSuffix(rest, "/preview") {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			h.methodNotAllowed(w)
+			return
+		}
+		preview := strings.HasSuffix(rest, "/preview")
+		jobID := strings.TrimSuffix(strings.TrimSuffix(rest, "/file"), "/preview")
+		jobID = strings.TrimSuffix(jobID, "/")
+		if jobID == "" || strings.Contains(jobID, "/") {
+			h.notFound(w)
+			return
+		}
+		h.streamJobOutput(w, r, jobID, preview)
 		return
 	}
 	if strings.HasSuffix(rest, "/url") {
@@ -516,8 +547,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		h.badRequest(w, "url is required")
 		return
 	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		h.badRequest(w, "url must start with http:// or https://")
+	if err := domain.ValidateJobURL(domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))), strings.TrimSpace(req.URL)); err != nil {
+		h.badRequest(w, err.Error())
 		return
 	}
 
@@ -530,8 +561,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		ID:          uuid.NewString(),
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		Type:        domain.JobType(strings.ToUpper(req.Type)),
-		URL:         req.URL,
+		Type:        domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))),
+		URL:         strings.TrimSpace(req.URL),
 		StoragePath: req.StoragePath,
 		ProfileID:   req.ProfileID,
 		NodeID:      req.NodeID,
@@ -779,8 +810,8 @@ func (h *Handler) updateJobURL(w http.ResponseWriter, r *http.Request, jobID str
 		h.badRequest(w, "url is required")
 		return
 	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		h.badRequest(w, "url must start with http:// or https://")
+	if err := h.validateURLForJob(r.Context(), jobID, req.URL); err != nil {
+		h.badRequest(w, err.Error())
 		return
 	}
 
@@ -1266,7 +1297,7 @@ func ptrInt64(value int64) *int64 {
 }
 
 func parseAvailableTypes(raw *string) []string {
-	defaultTypes := []string{"DIRECT", "YTDLP", "ARIA2C"}
+	defaultTypes := []string{"DIRECT", "YTDLP", "ARIA2C", "TORRENT"}
 	if raw == nil || strings.TrimSpace(*raw) == "" {
 		return defaultTypes
 	}
@@ -1327,6 +1358,19 @@ func (h *Handler) transferJobOutputBetweenNodes(ctx context.Context, job *domain
 	msg := fmt.Sprintf("moved to node %s", targetNode.Name)
 	job.Message = &msg
 	return nil
+}
+
+// validateURLForJob checks a replacement URL against the existing job's type.
+func (h *Handler) validateURLForJob(ctx context.Context, jobID, url string) error {
+	if h.jobRepo == nil {
+		return domain.ValidateJobURL("", url)
+	}
+	job, err := h.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		// Unknown job: let the controller report not found.
+		return domain.ValidateJobURL("", url)
+	}
+	return domain.ValidateJobURL(job.Type, url)
 }
 
 func normalizeTypeList(list []string, fallback []string) []string {

@@ -1,9 +1,5 @@
 @import './tokens.css';
 @import './base.css';
-@import './layout.css';
-@import './forms.css';
-@import './modal.css';
-@import './downloads.css';
-@import './settings.css';
-@import './responsive.css';
-@import './motion-dark.css';
+@import './shell.css';
+@import './components.css';
+@import './jobs.css';
