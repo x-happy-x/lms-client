@@ -14,6 +14,7 @@ import {
 import type { Job, NodeItem } from '../../types'
 import { Icon } from '../../ui/Icon'
 import { Menu, type MenuItem } from '../../ui/Menu'
+import { formatLimit } from '../../ui/SpeedLimitPicker'
 import { Thumb } from '../../ui/Thumb'
 
 export type JobActions = {
@@ -23,6 +24,7 @@ export type JobActions = {
   cancel: (job: Job) => void
   editUrl: (job: Job) => void
   move: (job: Job) => void
+  speed: (job: Job) => void
   open: (job: Job) => void
 }
 
@@ -53,6 +55,7 @@ function details(job: Job, node?: NodeItem): string[] {
   } else if (typeof total === 'number') {
     parts.push(formatBytes(total))
   }
+  if (job.maxSpeedBytes && ACTIVE.includes(job.status)) parts.push(`до ${formatLimit(job.maxSpeedBytes)}`)
   parts.push(typeLabel(job.type))
   if (node) parts.push(node.name)
   const date = formatDate(job.finishedAt ?? job.createdAt)
@@ -66,6 +69,12 @@ function menuItems(job: Job, actions: JobActions): MenuItem[] {
     { label: 'Скачать на это устройство', icon: 'download', href: fileUrl(job.id), download: true, hidden: !done },
     { label: 'Открыть', icon: 'eye', onSelect: () => actions.open(job), hidden: !isViewableMedia(job) },
     { label: 'Переместить', icon: 'move', onSelect: () => actions.move(job), hidden: !job.remoteJobId },
+    {
+      label: job.maxSpeedBytes ? `Скорость: ${formatLimit(job.maxSpeedBytes)}` : 'Ограничить скорость',
+      icon: 'sliders',
+      onSelect: () => actions.speed(job),
+      hidden: !ACTIVE.includes(job.status)
+    },
     { label: 'Изменить ссылку', icon: 'edit', onSelect: () => actions.editUrl(job), hidden: job.status === 'DONE' },
     {
       label: 'Копировать ссылку',

@@ -25,6 +25,12 @@ type fileStubNodeClient struct {
 	stubNodeClient
 	lastHeaders    map[string]string
 	previewMissing bool
+	speedCalls     []*int64
+}
+
+func (s *fileStubNodeClient) SetSpeedLimit(_ context.Context, _ domain.Node, _ string, limit *int64) (domain.NodeJobStatusResponse, error) {
+	s.speedCalls = append(s.speedCalls, limit)
+	return domain.NodeJobStatusResponse{}, nil
 }
 
 func (s *fileStubNodeClient) OpenJobOutput(_ context.Context, _ domain.Node, _ string, headers map[string]string) (*http.Response, error) {
@@ -243,5 +249,58 @@ func TestMagnetLinksOnlyForTorrentJobs(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected preflight 200 for magnet, got %d", resp.StatusCode)
+	}
+}
+
+func TestSpeedLimitIsStoredAndForwardedToNode(t *testing.T) {
+	t.Parallel()
+	f := newStreamFixture(t)
+
+	resp, err := http.Post(f.server.URL+"/api/ui/jobs", "application/json",
+		bytes.NewReader([]byte(`{"type":"DIRECT","url":"https://example.com/a.bin","nodeId":"`+f.nodeID+`","maxSpeedBytes":1048576}`)))
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	var created map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&created)
+	resp.Body.Close()
+	if created["maxSpeedBytes"] != float64(1048576) {
+		t.Fatalf("limit not stored on create: %v", created)
+	}
+	jobID := created["id"].(string)
+
+	speed := func(body string) (int, map[string]any) {
+		resp, err := http.Post(f.server.URL+"/api/ui/jobs/"+jobID+"/speed", "application/json", bytes.NewReader([]byte(body)))
+		if err != nil {
+			t.Fatalf("speed: %v", err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+		return resp.StatusCode, out
+	}
+
+	// Not dispatched yet: stored only, the node is not called.
+	if code, out := speed(`{"maxSpeedBytes":500000}`); code != http.StatusOK || out["maxSpeedBytes"] != float64(500000) {
+		t.Fatalf("unexpected %d %v", code, out)
+	}
+	if len(f.client.speedCalls) != 0 {
+		t.Fatalf("node must not be called before dispatch")
+	}
+
+	// Running on a node: forwarded.
+	job, _ := f.jobRepo.GetByID(context.Background(), jobID)
+	remote := "remote-9"
+	job.RemoteJobID = &remote
+	job.Status = domain.JobStatusRunning
+	_ = f.jobRepo.Update(context.Background(), job)
+	if code, out := speed(`{"maxSpeedBytes":0}`); code != http.StatusOK || out["maxSpeedBytes"] != nil {
+		t.Fatalf("0 must remove the limit: %d %v", code, out)
+	}
+	if len(f.client.speedCalls) != 1 || f.client.speedCalls[0] != nil {
+		t.Fatalf("expected one node call with nil limit, got %v", f.client.speedCalls)
+	}
+	if code, _ := speed(`{"maxSpeedBytes":-1}`); code != http.StatusBadRequest {
+		t.Fatalf("negative limit must be rejected, got %d", code)
 	}
 }

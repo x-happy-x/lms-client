@@ -4,6 +4,7 @@ import { formatBytes, typeLabel } from '../../lib/format'
 import type { JobPreflightNode, JobPreflightResponse, Profile, StorageTarget } from '../../types'
 import { Dialog } from '../../ui/Dialog'
 import { Icon } from '../../ui/Icon'
+import { SpeedLimitPicker } from '../../ui/SpeedLimitPicker'
 
 type Props = {
   value: NewJobFormState
@@ -145,6 +146,10 @@ export function NewDownloadDialog(props: Props) {
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="field">
+              <span>Ограничение скорости</span>
+              <SpeedLimitPicker value={value.maxSpeedBytes} onChange={(maxSpeedBytes) => onChange({ ...value, maxSpeedBytes })} />
             </div>
             {props.targetsError ? <div className="alert error">{props.targetsError}</div> : null}
             {props.targets.length > 0 ? (

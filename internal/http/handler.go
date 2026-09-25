@@ -60,6 +60,11 @@ type createJobRequest struct {
 	ProfileID        *string `json:"profileId,omitempty"`
 	NodeID           *string `json:"nodeId,omitempty"`
 	StartImmediately *bool   `json:"startImmediately,omitempty"`
+	MaxSpeedBytes    *int64  `json:"maxSpeedBytes,omitempty"`
+}
+
+type speedLimitRequest struct {
+	MaxSpeedBytes *int64 `json:"maxSpeedBytes"`
 }
 
 type jobPreflightRequest struct {
@@ -157,6 +162,7 @@ type jobResponse struct {
 	OutputPath      *string  `json:"outputPath,omitempty"`
 	OutputSizeBytes *int64   `json:"outputSizeBytes,omitempty"`
 	ErrorText       *string  `json:"errorText,omitempty"`
+	MaxSpeedBytes   *int64   `json:"maxSpeedBytes,omitempty"`
 }
 
 type nodeResponse struct {
@@ -435,6 +441,15 @@ func (h *Handler) jobsByID(w http.ResponseWriter, r *http.Request) {
 		h.streamJobOutput(w, r, jobID, preview)
 		return
 	}
+	if strings.HasSuffix(rest, "/speed") {
+		if r.Method != http.MethodPost {
+			h.methodNotAllowed(w)
+			return
+		}
+		jobID := strings.TrimSuffix(strings.TrimSuffix(rest, "/speed"), "/")
+		h.setJobSpeedLimit(w, r, jobID)
+		return
+	}
 	if strings.HasSuffix(rest, "/url") {
 		if r.Method != http.MethodPost {
 			h.methodNotAllowed(w)
@@ -552,21 +567,28 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	maxSpeed, err := normalizeSpeedLimit(req.MaxSpeedBytes)
+	if err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
+
 	now := time.Now().UTC()
 	status := domain.JobStatusQueued
 	if req.StartImmediately != nil && !*req.StartImmediately {
 		status = domain.JobStatusPaused
 	}
 	job := domain.Job{
-		ID:          uuid.NewString(),
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		Type:        domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))),
-		URL:         strings.TrimSpace(req.URL),
-		StoragePath: req.StoragePath,
-		ProfileID:   req.ProfileID,
-		NodeID:      req.NodeID,
-		Status:      status,
+		ID:            uuid.NewString(),
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		Type:          domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))),
+		URL:           strings.TrimSpace(req.URL),
+		StoragePath:   req.StoragePath,
+		ProfileID:     req.ProfileID,
+		NodeID:        req.NodeID,
+		Status:        status,
+		MaxSpeedBytes: maxSpeed,
 	}
 
 	if err := h.jobRepo.Create(r.Context(), job); err != nil {
@@ -1183,6 +1205,7 @@ func toJobResponse(j domain.Job) jobResponse {
 		FinishedAt:      finishedAt,
 		OutputPath:      j.OutputPath,
 		OutputSizeBytes: j.OutputSizeBytes,
+		MaxSpeedBytes:   j.MaxSpeedBytes,
 		ErrorText:       j.ErrorText,
 	}
 }
@@ -1358,6 +1381,63 @@ func (h *Handler) transferJobOutputBetweenNodes(ctx context.Context, job *domain
 	msg := fmt.Sprintf("moved to node %s", targetNode.Name)
 	job.Message = &msg
 	return nil
+}
+
+// setJobSpeedLimit stores the job's download limit and, if the job is already on a
+// node and not finished, applies it there (the node restarts tool-based downloads).
+func (h *Handler) setJobSpeedLimit(w http.ResponseWriter, r *http.Request, jobID string) {
+	if h.jobRepo == nil {
+		h.internalError(w, "job repo is not configured")
+		return
+	}
+	var req speedLimitRequest
+	if err := decodeJSON(r, &req); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
+	limit, err := normalizeSpeedLimit(req.MaxSpeedBytes)
+	if err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
+	job, err := h.jobRepo.GetByID(r.Context(), jobID)
+	if err != nil {
+		if errors.Is(err, sqlite.ErrNotFound) {
+			h.notFound(w)
+			return
+		}
+		h.internalError(w, err.Error())
+		return
+	}
+	if job.RemoteJobID != nil && job.NodeID != nil && !job.Status.IsTerminal() && h.nodeClient != nil && h.nodeRepo != nil {
+		node, err := h.nodeRepo.GetByID(r.Context(), *job.NodeID)
+		if err != nil {
+			h.internalError(w, err.Error())
+			return
+		}
+		if _, err := h.nodeClient.SetSpeedLimit(r.Context(), node, *job.RemoteJobID, limit); err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	job.MaxSpeedBytes = limit
+	job.UpdatedAt = time.Now().UTC()
+	if err := h.jobRepo.Update(r.Context(), job); err != nil {
+		h.internalError(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, toJobResponse(job))
+}
+
+// normalizeSpeedLimit maps 0/nil to "unlimited" and rejects negative values.
+func normalizeSpeedLimit(value *int64) (*int64, error) {
+	if value == nil || *value == 0 {
+		return nil, nil
+	}
+	if *value < 0 {
+		return nil, fmt.Errorf("maxSpeedBytes must be positive")
+	}
+	return value, nil
 }
 
 // validateURLForJob checks a replacement URL against the existing job's type.

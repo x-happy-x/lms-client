@@ -8,6 +8,7 @@ export type NewJobFormState = {
   storagePath: string
   nodeId: string
   profileId: string
+  maxSpeedBytes: number | null
 }
 
 type UseNewDownloadFlowParams = {
@@ -20,7 +21,8 @@ const INITIAL_FORM: NewJobFormState = {
   url: '',
   storagePath: '',
   nodeId: '',
-  profileId: ''
+  profileId: '',
+  maxSpeedBytes: null
 }
 
 function withOptional(value: string): string | undefined {
@@ -184,6 +186,7 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
         storagePath: withOptional(value.storagePath),
         nodeId: withOptional(value.nodeId),
         profileId: withOptional(value.profileId),
+        maxSpeedBytes: value.maxSpeedBytes ?? undefined,
         startImmediately
       })
       closeModal()

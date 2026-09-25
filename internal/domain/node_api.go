@@ -11,6 +11,7 @@ type NodeJobCreateRequest struct {
 	URL              string  `json:"url"`
 	StoragePath      *string `json:"storagePath,omitempty"`
 	StartImmediately *bool   `json:"startImmediately,omitempty"`
+	MaxSpeedBytes    *int64  `json:"maxSpeedBytes,omitempty"`
 }
 
 type NodeJobCreateResponse struct {
@@ -88,6 +89,8 @@ type NodeClient interface {
 	ResumeJob(ctx context.Context, node Node, remoteJobID string) (NodeJobStatusResponse, error)
 	RetryJob(ctx context.Context, node Node, remoteJobID string) (NodeJobStatusResponse, error)
 	MoveJobOutput(ctx context.Context, node Node, remoteJobID string, storagePath *string) (NodeJobStatusResponse, error)
+	// SetSpeedLimit changes a job's download limit on the node (nil = unlimited).
+	SetSpeedLimit(ctx context.Context, node Node, remoteJobID string, maxSpeedBytes *int64) (NodeJobStatusResponse, error)
 	DeleteJobOutput(ctx context.Context, node Node, remoteJobID string) (NodeJobStatusResponse, error)
 	GetStorageTargets(ctx context.Context, node Node, requiredBytes *int64) (NodeStorageTargetsResponse, error)
 	EstimateStorage(ctx context.Context, node Node, req NodeStorageEstimateRequest) (NodeStorageEstimateResponse, error)

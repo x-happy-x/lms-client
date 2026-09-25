@@ -302,6 +302,9 @@ func (s *stubNodeClient) MoveJobOutput(context.Context, domain.Node, string, *st
 	path := "/tmp/moved.bin"
 	return domain.NodeJobStatusResponse{Status: "DONE", OutputPath: &path}, nil
 }
+func (s *stubNodeClient) SetSpeedLimit(context.Context, domain.Node, string, *int64) (domain.NodeJobStatusResponse, error) {
+	return domain.NodeJobStatusResponse{Status: "RUNNING"}, nil
+}
 func (s *stubNodeClient) DeleteJobOutput(context.Context, domain.Node, string) (domain.NodeJobStatusResponse, error) {
 	return domain.NodeJobStatusResponse{Status: "DONE"}, nil
 }

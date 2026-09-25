@@ -6,13 +6,16 @@ Base path `/api/ui`, JSON unless noted. Errors: `{"error": "..."}`.
 
 - `POST /api/ui/jobs/preflight` — `{url}`; per-node supported types, size, default path.
   Magnet links skip the HTTP probe and offer `TORRENT` on online nodes.
-- `POST /api/ui/jobs` — `{type, url, storagePath?, profileId?, nodeId?, startImmediately?}`.
+- `POST /api/ui/jobs` — `{type, url, storagePath?, profileId?, nodeId?, startImmediately?, maxSpeedBytes?}`.
   Types: `DIRECT`, `YTDLP`, `ARIA2C`, `TORRENT`. URLs: `http(s)://` for all types,
   `magnet:?` only for `TORRENT`.
 - `GET /api/ui/jobs?active=true`
 - `GET /api/ui/jobs/{id}`
 - `POST /api/ui/jobs/{id}/cancel|pause|resume|retry` — body `{}`
 - `POST /api/ui/jobs/{id}/url` — `{url}`
+- `POST /api/ui/jobs/{id}/speed` — `{maxSpeedBytes}` (bytes/s, `null`/`0` = unlimited). Stored on the
+  job; if it already runs on a node, the node applies it (HTTP immediately, other types restart
+  and resume).
 - `POST /api/ui/jobs/{id}/move` — `{targetNodeId?, storagePath?}`
 - `GET|HEAD /api/ui/jobs/{id}/file` — streams the job output from its node (not JSON).
   `Range`/`If-Range` are forwarded (206/416 pass through), so downloads resume and

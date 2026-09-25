@@ -24,6 +24,7 @@ export type Job = {
   outputPath?: string
   outputSizeBytes?: number
   errorText?: string
+  maxSpeedBytes?: number
 }
 
 export type NodeStatus = 'online' | 'offline' | 'never_seen' | 'disabled' | 'unknown'
