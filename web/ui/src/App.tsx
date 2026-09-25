@@ -1,246 +1,212 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
-import { Sidebar } from './components/layout/Sidebar'
-import { Topbar } from './components/layout/Topbar'
-import { NewDownloadForm } from './components/jobs/NewDownloadForm'
-import { DownloadsPanel } from './components/downloads/DownloadsPanel'
-import { NodesPanel } from './components/nodes/NodesPanel'
-import { ProfilesPanel } from './components/profiles/ProfilesPanel'
-import { SettingsPanel } from './components/settings/SettingsPanel'
-import { useJobsPanelController } from './hooks/useJobsPanelController'
+import { JobDialogsHost } from './components/jobs/JobDialogsHost'
+import { JobsPage } from './components/jobs/JobsPage'
+import { NewDownloadDialog } from './components/jobs/NewDownloadDialog'
+import type { JobActions } from './components/jobs/JobItem'
+import { MediaPage } from './components/media/MediaPage'
+import { MediaViewer } from './components/media/MediaViewer'
+import { NodesPage } from './components/nodes/NodesPage'
+import { ProfilesPage } from './components/profiles/ProfilesPage'
+import { SettingsPage } from './components/settings/SettingsPage'
 import { useNewDownloadFlow } from './hooks/useNewDownloadFlow'
+import { usePreferences } from './hooks/usePreferences'
 import { useRouterData } from './hooks/useRouterData'
-import { useUiPreferences } from './hooks/useUiPreferences'
-import type { TabKey } from './types'
+import { isViewableMedia } from './lib/fileKinds'
+import type { Job, TabKey } from './types'
+import { Icon, type IconName } from './ui/Icon'
 
-type NodeForm = {
-  name: string
-  baseUrl: string
-  clientId: string
-  secret: string
-  enabled: boolean
-}
+const TABS: Array<{ key: TabKey; label: string; icon: IconName }> = [
+  { key: 'jobs', label: 'Загрузки', icon: 'download' },
+  { key: 'media', label: 'Медиа', icon: 'image' },
+  { key: 'nodes', label: 'Ноды', icon: 'server' },
+  { key: 'profiles', label: 'Профили', icon: 'profile' },
+  { key: 'settings', label: 'Настройки', icon: 'settings' }
+]
 
-type ProfileForm = {
-  name: string
-  type: string
-  enabled: boolean
-}
+type Viewer = { list: Job[]; index: number } | null
+type JobDialog = { kind: 'url' | 'move'; job: Job } | null
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('jobs')
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [viewer, setViewer] = useState<Viewer>(null)
+  const [dialog, setDialog] = useState<JobDialog>(null)
+  const { prefs, setTheme, setView, setQuery, resetQuery } = usePreferences()
+  const { health, version, jobs, nodes, profiles, refreshJobs, refreshNodes, refreshProfiles } = useRouterData({ setError })
+  const newDownload = useNewDownloadFlow({ refreshJobs, setError })
 
-  const [createNode, setCreateNode] = useState<NodeForm>({
-    name: '',
-    baseUrl: '',
-    clientId: 'router-main',
-    secret: '',
-    enabled: true
-  })
-  const [editNodeId, setEditNodeId] = useState('')
-  const [editNode, setEditNode] = useState<NodeForm | null>(null)
+  // "?add=<link>" opens the new-download dialog (bookmarklets, shared links).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const link = params.get('add')
+    if (link) {
+      void newDownload.openModal(link)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    // Runs once on load; openModal is stable enough for this one-shot.
+  }, [])
 
-  const [newProfile, setNewProfile] = useState<ProfileForm>({
-    name: '',
-    type: 'DIRECT',
-    enabled: true
-  })
-
-  const preferences = useUiPreferences()
-
-  const {
-    health,
-    version,
-    jobs,
-    nodes,
-    profiles,
-    refreshJobs,
-    refreshNodes,
-    refreshProfiles
-  } = useRouterData({ setError })
-
-  const newDownload = useNewDownloadFlow({
-    refreshJobs,
-    setError
-  })
-
-  const jobsPanel = useJobsPanelController({
-    jobs,
-    nodes,
-    search,
-    refreshJobs,
-    setError
-  })
-
-  const jobsActiveCount = useMemo(
-    () => jobs.filter((job) => job.status === 'RUNNING' || job.status === 'QUEUED' || job.status === 'PAUSED').length,
-    [jobs]
-  )
-  const jobsCompletedCount = useMemo(() => jobs.filter((job) => job.status === 'DONE').length, [jobs])
-  const onlineNodes = useMemo(() => nodes.filter((node) => node.status === 'online').length, [nodes])
-  const offlineNodes = useMemo(
-    () => nodes.filter((node) => node.status === 'offline' || node.status === 'never_seen').length,
-    [nodes]
+  const run = useCallback(
+    async (action: () => Promise<unknown>) => {
+      try {
+        await action()
+        setError('')
+        await refreshJobs()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    },
+    [refreshJobs]
   )
 
-  const createNodeAction = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    try {
-      await api.createNode(createNode)
-      setCreateNode((current) => ({ ...current, name: '', baseUrl: '', secret: '' }))
-      setError('')
-      await refreshNodes()
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }
+  const actions: JobActions = useMemo(
+    () => ({
+      pause: (job) => void run(() => api.pauseJob(job.id)),
+      resume: (job) => void run(() => api.resumeJob(job.id)),
+      retry: (job) => void run(() => api.retryJob(job.id)),
+      cancel: (job) => {
+        if (window.confirm('Отменить загрузку?')) void run(() => api.cancelJob(job.id))
+      },
+      editUrl: (job) => setDialog({ kind: 'url', job }),
+      move: (job) => setDialog({ kind: 'move', job }),
+      open: (job) => {
+        const list = jobs.filter(isViewableMedia)
+        setViewer({ list, index: Math.max(0, list.findIndex((item) => item.id === job.id)) })
+      }
+    }),
+    [run, jobs]
+  )
 
-  const updateNodeAction = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!editNodeId || !editNode) return
-    try {
-      await api.updateNode(editNodeId, editNode)
-      setEditNodeId('')
-      setEditNode(null)
-      setError('')
-      await refreshNodes()
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }
-
-  const createProfileAction = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    try {
-      await api.createProfile(newProfile)
-      setNewProfile((current) => ({ ...current, name: '' }))
-      setError('')
-      await refreshProfiles()
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }
+  const active = jobs.filter((job) => job.status === 'RUNNING' || job.status === 'QUEUED').length
+  const online = nodes.filter((node) => node.status === 'online').length
+  const current = TABS.find((item) => item.key === tab)!
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        activeTab={tab}
-        onChangeTab={setTab}
-        theme={preferences.theme}
-        onToggleTheme={preferences.toggleTheme}
-        version={version}
-        onlineNodes={onlineNodes}
-        offlineNodes={offlineNodes}
-        health={health}
-      />
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark"><Icon name="download" size={18} /></span>
+          <span>
+            <strong>LMS</strong>
+            <span className="muted small">загрузки</span>
+          </span>
+        </div>
+        <nav className="nav">
+          {TABS.map((item) => (
+            <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)}>
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
+              {item.key === 'jobs' && active > 0 ? <span className="count">{active}</span> : null}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <span className={`status-dot ${online > 0 ? 'node-online' : 'node-offline'}`} />
+          <span className="small">
+            Нод в сети: {online} из {nodes.length}
+          </span>
+          <span className="muted small">v{version}</span>
+        </div>
+      </aside>
 
-      <main className="main-content">
-        <Topbar
-          search={search}
-          onSearchChange={setSearch}
-          runningJobs={jobsActiveCount}
-          completedJobs={jobsCompletedCount}
-          onCreateClick={() => {
-            setTab('jobs')
-            void newDownload.openModal()
-          }}
-        />
+      <div className="main">
+        <header className="topbar">
+          <h1>{current.label}</h1>
+          {tab === 'jobs' || tab === 'media' ? (
+            <label className="search">
+              <Icon name="search" size={18} />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск по имени и ссылке" aria-label="Поиск" />
+              {search ? (
+                <button type="button" className="icon-btn small" onClick={() => setSearch('')} aria-label="Очистить">
+                  <Icon name="close" size={16} />
+                </button>
+              ) : null}
+            </label>
+          ) : (
+            <span className="spacer" />
+          )}
+          <button
+            type="button"
+            className="btn primary add-btn"
+            onClick={() => {
+              setTab('jobs')
+              void newDownload.openModal()
+            }}
+          >
+            <Icon name="plus" size={18} />
+            <span>Загрузка</span>
+          </button>
+        </header>
 
-        {error ? <div className="error-banner">{error}</div> : null}
-
-        {tab === 'jobs' ? (
-          <div className="jobs-layout jobs-layout-single">
-            <DownloadsPanel
-              jobs={jobsPanel.visibleJobs}
-              nodes={nodes}
-              iconRules={preferences.iconRules}
-              filter={jobsPanel.filter}
-              onFilterChange={jobsPanel.setFilter}
-              onRefresh={refreshJobs}
-              moveState={jobsPanel.moveForm}
-              onMoveStateChange={jobsPanel.setMoveForm}
-              onPause={jobsPanel.pauseJob}
-              onResume={jobsPanel.resumeJob}
-              onCancel={jobsPanel.cancelJob}
-              onRetry={jobsPanel.retryJob}
-              urlEditState={jobsPanel.urlEditForm}
-              onUrlEditStateChange={jobsPanel.setUrlEditForm}
-              onUrlEditPrepare={jobsPanel.prepareUrlEdit}
-              onUrlEditSubmit={jobsPanel.submitUrlEdit}
-              onUrlEditCancel={jobsPanel.cancelUrlEdit}
-              onMovePrepare={jobsPanel.prepareMove}
-              onMoveSubmit={jobsPanel.submitMove}
-              onMoveCancel={jobsPanel.cancelMove}
-            />
+        {error ? (
+          <div className="alert error banner" role="alert">
+            <Icon name="alert" size={18} /> {error}
+            <button type="button" className="icon-btn small" onClick={() => setError('')} aria-label="Скрыть">
+              <Icon name="close" size={16} />
+            </button>
           </div>
         ) : null}
+        {health === 'offline' ? <div className="alert warn banner">Роутер не отвечает — данные могут быть устаревшими.</div> : null}
 
-        {tab === 'nodes' ? (
-          <NodesPanel
-            nodes={nodes}
-            createForm={createNode}
-            onCreateFormChange={setCreateNode}
-            onCreateSubmit={createNodeAction}
-            editNodeId={editNodeId}
-            editForm={editNode}
-            onEditStart={(node) => {
-              setEditNodeId(node.id)
-              setEditNode({
-                name: node.name,
-                baseUrl: node.baseUrl,
-                clientId: node.clientId,
-                secret: '',
-                enabled: node.enabled
-              })
-            }}
-            onEditCancel={() => {
-              setEditNodeId('')
-              setEditNode(null)
-            }}
-            onEditFormChange={setEditNode}
-            onEditSubmit={updateNodeAction}
-            onRefresh={refreshNodes}
-          />
-        ) : null}
+        <main className="content">
+          {tab === 'jobs' ? (
+            <JobsPage
+              jobs={jobs}
+              nodes={nodes}
+              search={search}
+              prefs={prefs}
+              actions={actions}
+              onQuery={setQuery}
+              onView={setView}
+              onReset={resetQuery}
+              onAdd={() => void newDownload.openModal()}
+            />
+          ) : null}
+          {tab === 'media' ? <MediaPage jobs={jobs} search={search} onOpen={(list, index) => setViewer({ list, index })} /> : null}
+          {tab === 'nodes' ? <NodesPage nodes={nodes} onRefresh={refreshNodes} /> : null}
+          {tab === 'profiles' ? <ProfilesPage profiles={profiles} onRefresh={refreshProfiles} /> : null}
+          {tab === 'settings' ? <SettingsPage theme={prefs.theme} onTheme={setTheme} version={version} health={health} /> : null}
+        </main>
+      </div>
 
-        {tab === 'profiles' ? (
-          <ProfilesPanel
-            profiles={profiles}
-            form={newProfile}
-            onFormChange={setNewProfile}
-            onSubmit={createProfileAction}
-          />
-        ) : null}
+      <nav className="bottom-nav">
+        {TABS.map((item) => (
+          <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)}>
+            <Icon name={item.icon} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
 
-        {tab === 'settings' ? (
-          <SettingsPanel
-            rules={preferences.iconRules}
-            onRuleChange={preferences.updateRule}
-            onAddRule={preferences.addRule}
-            onDeleteRule={preferences.deleteRule}
-            onResetDefaults={preferences.resetRules}
-          />
-        ) : null}
-      </main>
-
-      <NewDownloadForm
-        open={newDownload.open}
-        value={newDownload.value}
-        onChange={newDownload.onChange}
-        onClose={newDownload.closeModal}
-        onSubmit={(startImmediately) => void newDownload.submit(startImmediately)}
-        nodes={nodes}
-        profiles={profiles.filter((profile) => profile.enabled)}
-        preflight={newDownload.preflight}
-        preflightLoading={newDownload.preflightLoading}
-        preflightError={newDownload.preflightError}
-        selectedNode={newDownload.selectedNode}
-        targets={newDownload.targets}
-        targetsLoading={newDownload.targetsLoading}
-        targetsError={newDownload.targetsError}
-      />
+      {newDownload.open ? (
+        <NewDownloadDialog
+          value={newDownload.value}
+          onChange={newDownload.onChange}
+          onClose={newDownload.closeModal}
+          onSubmit={(start) => void newDownload.submit(start)}
+          profiles={profiles.filter((profile) => profile.enabled)}
+          preflight={newDownload.preflight}
+          preflightLoading={newDownload.preflightLoading}
+          preflightError={newDownload.preflightError}
+          selectedNode={newDownload.selectedNode}
+          targets={newDownload.targets}
+          targetsLoading={newDownload.targetsLoading}
+          targetsError={newDownload.targetsError}
+          submitting={newDownload.submitting}
+          submitError={newDownload.submitError}
+        />
+      ) : null}
+      <JobDialogsHost dialog={dialog} nodes={nodes} onClose={() => setDialog(null)} onDone={refreshJobs} />
+      {viewer ? (
+        <MediaViewer
+          jobs={viewer.list}
+          index={viewer.index}
+          onIndex={(index) => setViewer({ ...viewer, index })}
+          onClose={() => setViewer(null)}
+        />
+      ) : null}
     </div>
   )
 }

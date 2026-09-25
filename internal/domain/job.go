@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,7 +13,31 @@ const (
 	JobTypeDirect JobType = "DIRECT"
 	JobTypeYTDLP  JobType = "YTDLP"
 	JobTypeAria2c JobType = "ARIA2C"
+	// JobTypeTorrent downloads magnet links and .torrent files (aria2c on the node).
+	JobTypeTorrent JobType = "TORRENT"
 )
+
+// IsMagnetURL reports whether raw is a BitTorrent magnet link.
+func IsMagnetURL(raw string) bool {
+	return len(raw) >= 8 && strings.EqualFold(raw[:8], "magnet:?")
+}
+
+// ValidateJobURL checks that url fits the job type: http(s) for every type, magnet
+// links only for TORRENT. An empty type (preflight) accepts both.
+func ValidateJobURL(jobType JobType, url string) error {
+	lower := strings.ToLower(url)
+	switch {
+	case strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://"):
+		return nil
+	case IsMagnetURL(url):
+		if jobType == "" || jobType == JobTypeTorrent {
+			return nil
+		}
+		return fmt.Errorf("magnet links are supported only by TORRENT jobs")
+	default:
+		return fmt.Errorf("url must start with http://, https:// or magnet:?")
+	}
+}
 
 type JobStatus string
 
