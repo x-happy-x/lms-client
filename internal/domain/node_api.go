@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"io"
+	"net/http"
 )
 
 type NodeJobCreateRequest struct {
@@ -92,5 +93,8 @@ type NodeClient interface {
 	EstimateStorage(ctx context.Context, node Node, req NodeStorageEstimateRequest) (NodeStorageEstimateResponse, error)
 	PreflightJob(ctx context.Context, node Node, url string) (NodeJobPreflightResponse, error)
 	DownloadJobOutput(ctx context.Context, node Node, remoteJobID string) (io.ReadCloser, string, error)
+	// OpenJobOutput/OpenJobPreview return the node's raw response (including 206/4xx) for proxying.
+	OpenJobOutput(ctx context.Context, node Node, remoteJobID string, headers map[string]string) (*http.Response, error)
+	OpenJobPreview(ctx context.Context, node Node, remoteJobID string) (*http.Response, error)
 	UploadFile(ctx context.Context, node Node, storagePath *string, fileName string, body io.Reader) (NodeUploadResponse, error)
 }

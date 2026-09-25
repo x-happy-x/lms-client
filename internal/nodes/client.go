@@ -30,7 +30,9 @@ type ClientConfig struct {
 
 type Client struct {
 	httpClient *http.Client
-	cfg        ClientConfig
+	// streamClient has no overall timeout: file bodies can take hours to transfer.
+	streamClient *http.Client
+	cfg          ClientConfig
 }
 
 func NewClient(cfg ClientConfig) *Client {
@@ -51,8 +53,9 @@ func NewClient(cfg ClientConfig) *Client {
 	}
 
 	return &Client{
-		httpClient: &http.Client{Timeout: cfg.DefaultTimeout},
-		cfg:        cfg,
+		httpClient:   &http.Client{Timeout: cfg.DefaultTimeout},
+		streamClient: newStreamClient(cfg.DefaultTimeout),
+		cfg:          cfg,
 	}
 }
 
@@ -161,8 +164,19 @@ func (c *Client) PreflightJob(ctx context.Context, node domain.Node, url string)
 	return result, nil
 }
 
+// OpenJobOutput streams a job's output file from the node. Range/If-Range headers are
+// forwarded, and 206/416 responses are returned as-is so callers can proxy them.
+func (c *Client) OpenJobOutput(ctx context.Context, node domain.Node, remoteJobID string, headers map[string]string) (*http.Response, error) {
+	return c.do(ctx, c.streamClient, node, http.MethodGet, "/api/jobs/"+remoteJobID+"/file", nil, headers, true)
+}
+
+// OpenJobPreview fetches a small JPEG thumbnail of a media output (404 when unavailable).
+func (c *Client) OpenJobPreview(ctx context.Context, node domain.Node, remoteJobID string) (*http.Response, error) {
+	return c.do(ctx, c.streamClient, node, http.MethodGet, "/api/jobs/"+remoteJobID+"/preview", nil, nil, true)
+}
+
 func (c *Client) DownloadJobOutput(ctx context.Context, node domain.Node, remoteJobID string) (io.ReadCloser, string, error) {
-	resp, err := c.call(ctx, node, http.MethodGet, "/api/jobs/"+remoteJobID+"/file", nil, nil)
+	resp, err := c.do(ctx, c.streamClient, node, http.MethodGet, "/api/jobs/"+remoteJobID+"/file", nil, nil, false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -289,6 +303,12 @@ func (c *Client) callJSON(ctx context.Context, node domain.Node, method, apiPath
 }
 
 func (c *Client) call(ctx context.Context, node domain.Node, method, apiPath string, body io.Reader, extraHeaders map[string]string) (*http.Response, error) {
+	return c.do(ctx, c.httpClient, node, method, apiPath, body, extraHeaders, false)
+}
+
+// do sends a signed request. With passThroughClientErrors, 4xx responses other than
+// auth/not-found are returned to the caller instead of being turned into errors.
+func (c *Client) do(ctx context.Context, client *http.Client, node domain.Node, method, apiPath string, body io.Reader, extraHeaders map[string]string, passThroughClientErrors bool) (*http.Response, error) {
 	fullURL, cleanPath, err := buildURL(node.BaseURL, apiPath)
 	if err != nil {
 		return nil, err
@@ -367,7 +387,7 @@ func (c *Client) call(ctx context.Context, node domain.Node, method, apiPath str
 			req.Header.Set(key, value)
 		}
 
-		resp, err := c.httpClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			if attempt < c.cfg.MaxAttempts {
 				c.sleepBackoff(attempt)
@@ -397,6 +417,9 @@ func (c *Client) call(ctx context.Context, node domain.Node, method, apiPath str
 			return nil, fmt.Errorf("node server error status=%d", resp.StatusCode)
 		}
 
+		if passThroughClientErrors && resp.StatusCode >= 400 {
+			return resp, nil
+		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			payload, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
@@ -443,4 +466,13 @@ func (c *Client) makeNonce() string {
 		b[i] = letters[c.cfg.Rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func newStreamClient(headerTimeout time.Duration) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if headerTimeout < 30*time.Second {
+		headerTimeout = 30 * time.Second
+	}
+	transport.ResponseHeaderTimeout = headerTimeout
+	return &http.Client{Transport: transport}
 }

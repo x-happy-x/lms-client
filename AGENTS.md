@@ -15,10 +15,13 @@ Router responsibilities only:
 - Dispatching, scheduling, status aggregation.
 - Managing node/profile metadata.
 - Serving UI API for LAN clients.
+- Streaming finished job files and media previews from nodes to LAN clients
+  (`GET /api/ui/jobs/{id}/file`, `/preview`), without storing them on the router.
 
 Router does **not**:
 
-- Download files itself.
+- Download files from the internet itself (nodes do).
+- Keep copies of job files: file/preview requests are proxied as streams.
 - Store large logs/artifacts.
 - Replace fail2ban/nginx security concerns on nodes.
 
@@ -34,6 +37,7 @@ Router does **not**:
    - signed `POST /api/jobs`
    - signed `GET /api/jobs/{id}`
    - signed `POST /api/jobs/{id}/cancel`
+   - signed `GET /api/jobs/{id}/file` (Range) and `/preview` for streaming to LAN clients
 3. Implement background poller (default every 10s) for active jobs.
 4. Store all control-plane state in SQLite.
 5. Ship a deployable single backend binary (`routerd`) + static UI.
@@ -42,7 +46,7 @@ Router does **not**:
 
 ## Non-goals (MVP)
 
-- No streaming/download proxy from router.
+- No caching or transcoding of files on the router (streaming proxy only).
 - No heavy analytics.
 - No distributed queue.
 - No long-term logs retention.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -333,6 +334,13 @@ func (s *stubNodeClient) DownloadJobOutput(context.Context, domain.Node, string)
 }
 func (s *stubNodeClient) UploadFile(context.Context, domain.Node, *string, string, io.Reader) (domain.NodeUploadResponse, error) {
 	return domain.NodeUploadResponse{OutputPath: "/downloads/payload.bin", SizeBytes: 7}, nil
+}
+
+func (s *stubNodeClient) OpenJobOutput(context.Context, domain.Node, string, map[string]string) (*http.Response, error) {
+	return nil, errors.New("unexpected")
+}
+func (s *stubNodeClient) OpenJobPreview(context.Context, domain.Node, string) (*http.Response, error) {
+	return nil, errors.New("unexpected")
 }
 
 type preflightStubNodeClient struct {
