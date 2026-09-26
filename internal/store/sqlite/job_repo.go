@@ -22,8 +22,8 @@ func (r *JobRepository) Create(ctx context.Context, job domain.Job) error {
 		INSERT INTO jobs (
 			id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		job.ID,
 		job.CreatedAt.UTC().Format(timeLayoutRFC3339()),
@@ -45,6 +45,7 @@ func (r *JobRepository) Create(ctx context.Context, job domain.Job) error {
 		job.OutputPath,
 		job.OutputSizeBytes,
 		job.ErrorText,
+		job.MaxSpeedBytes,
 	)
 	if err != nil {
 		return fmt.Errorf("insert job: %w", err)
@@ -56,7 +57,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id string) (domain.Job, err
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes
 		FROM jobs
 		WHERE id = ?
 	`, id)
@@ -75,7 +76,7 @@ func (r *JobRepository) List(ctx context.Context, activeOnly bool) ([]domain.Job
 	query := `
 		SELECT id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes
 		FROM jobs
 	`
 	args := make([]any, 0)
@@ -124,7 +125,8 @@ func (r *JobRepository) Update(ctx context.Context, job domain.Job) error {
 			finished_at = ?,
 			output_path = ?,
 			output_size_bytes = ?,
-			error_text = ?
+			error_text = ?,
+			max_speed_bytes = ?
 		WHERE id = ?
 	`,
 		job.UpdatedAt.UTC().Format(timeLayoutRFC3339()),
@@ -145,6 +147,7 @@ func (r *JobRepository) Update(ctx context.Context, job domain.Job) error {
 		job.OutputPath,
 		job.OutputSizeBytes,
 		job.ErrorText,
+		job.MaxSpeedBytes,
 		job.ID,
 	)
 	if err != nil {
@@ -181,6 +184,7 @@ func scanJob(s scanner) (domain.Job, error) {
 		outputPathRaw                sql.NullString
 		outputSizeBytesRaw           sql.NullInt64
 		errorTextRaw                 sql.NullString
+		maxSpeedBytesRaw             sql.NullInt64
 	)
 	if err := s.Scan(
 		&job.ID,
@@ -203,6 +207,7 @@ func scanJob(s scanner) (domain.Job, error) {
 		&outputPathRaw,
 		&outputSizeBytesRaw,
 		&errorTextRaw,
+		&maxSpeedBytesRaw,
 	); err != nil {
 		return domain.Job{}, fmt.Errorf("scan job: %w", err)
 	}
@@ -246,6 +251,7 @@ func scanJob(s scanner) (domain.Job, error) {
 	job.OutputPath = stringPtrFromNull(outputPathRaw)
 	job.OutputSizeBytes = int64PtrFromNull(outputSizeBytesRaw)
 	job.ErrorText = stringPtrFromNull(errorTextRaw)
+	job.MaxSpeedBytes = int64PtrFromNull(maxSpeedBytesRaw)
 
 	return job, nil
 }

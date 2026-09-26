@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
+import { ExtensionPage } from './components/extension/ExtensionPage'
 import { JobDialogsHost } from './components/jobs/JobDialogsHost'
 import { JobsPage } from './components/jobs/JobsPage'
 import { NewDownloadDialog } from './components/jobs/NewDownloadDialog'
@@ -16,16 +17,18 @@ import { isViewableMedia } from './lib/fileKinds'
 import type { Job, TabKey } from './types'
 import { Icon, type IconName } from './ui/Icon'
 
-const TABS: Array<{ key: TabKey; label: string; icon: IconName }> = [
+// desktopOnly: browser extensions are a desktop thing, so the phone bottom bar skips them.
+const TABS: Array<{ key: TabKey; label: string; icon: IconName; desktopOnly?: boolean }> = [
   { key: 'jobs', label: 'Загрузки', icon: 'download' },
   { key: 'media', label: 'Медиа', icon: 'image' },
   { key: 'nodes', label: 'Ноды', icon: 'server' },
   { key: 'profiles', label: 'Профили', icon: 'profile' },
+  { key: 'extension', label: 'Расширение', icon: 'puzzle', desktopOnly: true },
   { key: 'settings', label: 'Настройки', icon: 'settings' }
 ]
 
 type Viewer = { list: Job[]; index: number } | null
-type JobDialog = { kind: 'url' | 'move'; job: Job } | null
+type JobDialog = { kind: 'url' | 'move' | 'speed'; job: Job } | null
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('jobs')
@@ -71,6 +74,7 @@ export default function App() {
       },
       editUrl: (job) => setDialog({ kind: 'url', job }),
       move: (job) => setDialog({ kind: 'move', job }),
+      speed: (job) => setDialog({ kind: 'speed', job }),
       open: (job) => {
         const list = jobs.filter(isViewableMedia)
         setViewer({ list, index: Math.max(0, list.findIndex((item) => item.id === job.id)) })
@@ -167,12 +171,13 @@ export default function App() {
           {tab === 'media' ? <MediaPage jobs={jobs} search={search} onOpen={(list, index) => setViewer({ list, index })} /> : null}
           {tab === 'nodes' ? <NodesPage nodes={nodes} onRefresh={refreshNodes} /> : null}
           {tab === 'profiles' ? <ProfilesPage profiles={profiles} onRefresh={refreshProfiles} /> : null}
+          {tab === 'extension' ? <ExtensionPage /> : null}
           {tab === 'settings' ? <SettingsPage theme={prefs.theme} onTheme={setTheme} version={version} health={health} /> : null}
         </main>
       </div>
 
       <nav className="bottom-nav">
-        {TABS.map((item) => (
+        {TABS.filter((item) => !item.desktopOnly).map((item) => (
           <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)}>
             <Icon name={item.icon} />
             <span>{item.label}</span>

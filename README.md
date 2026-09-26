@@ -9,6 +9,10 @@ Control-plane service for home router (Entware): UI + lightweight API + SQLite.
 - Polls active jobs from node API and syncs status/progress.
 - Serves normalized data for UI.
 
+Clients: the web UI in `web/ui`, the Chromium extension in `browser-extension/`
+(finds videos, files and magnet links on pages and intercepts browser downloads,
+see its README) and the Android app (`x-happy-x/lms-android`).
+
 ## Planned repository structure
 
 See `AGENTS.md` and `docs/architecture.md`.
