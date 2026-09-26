@@ -28,6 +28,10 @@ type fileStubNodeClient struct {
 	speedCalls     []*int64
 }
 
+func (s *fileStubNodeClient) ExtractMedia(context.Context, domain.Node, string) (domain.NodeMediaExtractResponse, error) {
+	return domain.NodeMediaExtractResponse{}, nil
+}
+
 func (s *fileStubNodeClient) SetSpeedLimit(_ context.Context, _ domain.Node, _ string, limit *int64) (domain.NodeJobStatusResponse, error) {
 	s.speedCalls = append(s.speedCalls, limit)
 	return domain.NodeJobStatusResponse{}, nil

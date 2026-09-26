@@ -85,6 +85,7 @@ body.popup { width: 400px; max-height: 580px; padding: 10px 12px 12px; }
 .page-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page .btn { flex: 1; }
 .speed select { width: 110px; }
+.quick { margin-top: 8px; }
 .quick input { flex: 1; }
 .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 12px 2px 6px; }
 .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -119,6 +120,16 @@ body.popup { width: 400px; max-height: 580px; padding: 10px 12px 12px; }
 .kind-document { background: #2563eb; }
 .kind-disk, .kind-app { background: #475569; }
 .empty { padding: 8px 2px; }
+
+/* yt-dlp results */
+.page .row:first-of-type .btn { flex: 1; }
+.ytdlp { margin-top: 8px; display: grid; gap: 6px; }
+.ytdlp .section-title { margin-top: 4px; }
+.row.wrap { flex-wrap: wrap; }
+.entries { max-height: 260px; overflow-y: auto; gap: 2px; }
+.entry { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; }
+.entry-label { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; cursor: pointer; }
+.entry-label .name { font-weight: 400; }
 
 /* options */
 body.options main { max-width: 680px; margin: 0 auto; padding: 24px 16px 40px; }

@@ -91,5 +91,44 @@
   document.addEventListener('click', onMagnetClick, true)
   document.addEventListener('auxclick', onMagnetClick, true)
 
+  // Bridge for the LMS web UI ("Расширение" page): it asks whether the extension is installed
+  // and can connect it to its own address. Only the top frame answers, a site learns only
+  // whether the extension points at that site, and connecting always asks the user first.
+  function originOf(raw) {
+    let value = (raw || '').trim()
+    if (!value) return ''
+    if (!/^https?:\/\//i.test(value)) value = `http://${value}`
+    try {
+      return new URL(value).origin
+    } catch {
+      return ''
+    }
+  }
+
+  function reply(type, extra) {
+    window.postMessage({ source: 'lms-extension', type, version: chrome.runtime.getManifest().version, ...extra }, location.origin)
+  }
+
+  if (window.top === window) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window || event.origin !== location.origin) return
+      const data = event.data
+      if (!data || data.source !== 'lms-ui' || !chrome.runtime?.id) return
+      if (data.type === 'ping') {
+        chrome.storage.sync.get({ routerUrl: '' }, (value) => {
+          reply('pong', { connected: originOf(value.routerUrl) === location.origin })
+        })
+      }
+      if (data.type === 'connect') {
+        const ok = window.confirm(`Подключить расширение LMS к ${location.origin}?\nСсылки и перехваченные загрузки будут отправляться сюда.`)
+        if (!ok) {
+          reply('connect-result', { connected: false })
+          return
+        }
+        chrome.storage.sync.set({ routerUrl: location.origin }, () => reply('connect-result', { connected: true }))
+      }
+    })
+  }
+
   schedule(300)
 })()

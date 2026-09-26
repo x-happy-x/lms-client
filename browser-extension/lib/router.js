@@ -37,6 +37,14 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
   return body
 }
 
+/**
+ * Asks the router to run yt-dlp on a node over the page (no download): one video or a
+ * playlist / page with several videos as `entries`. Slow on big playlists (up to ~2 min).
+ */
+export function extractMedia(settings, url, fetchImpl) {
+  return request(settings, '/media/extract', { method: 'POST', body: JSON.stringify({ url }) }, fetchImpl)
+}
+
 export function health(settings, fetchImpl) {
   return request(settings, '/system/health', {}, fetchImpl)
 }

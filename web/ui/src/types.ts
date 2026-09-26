@@ -1,4 +1,4 @@
-export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'settings'
+export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'extension' | 'settings'
 export type ThemeMode = 'system' | 'light' | 'dark'
 
 export type JobStatus = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'DONE' | 'ERROR' | 'CANCELED'

@@ -2,7 +2,7 @@
 // media sniffing and sending links to the LMS router.
 import { shouldIntercept, downloadKind, sniffKind } from './lib/intercept.js'
 import { displayName, isHttp, isMagnet, isVideoHost, normalizeCandidates, normalizeRouterUrl } from './lib/links.js'
-import { DEFAULT_SETTINGS, health, sendToRouter } from './lib/router.js'
+import { DEFAULT_SETTINGS, extractMedia, health, sendToRouter } from './lib/router.js'
 
 const TYPE_LABEL = { DIRECT: 'HTTP', YTDLP: 'yt-dlp', ARIA2C: 'aria2c', TORRENT: 'торрент' }
 const SNIFF_LIMIT = 60
@@ -70,7 +70,7 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 })
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabs.delete(tabId)
-  chrome.storage.session.remove(`tab:${tabId}`).catch(() => {})
+  chrome.storage.session.remove([`tab:${tabId}`, `extract:${tabId}`]).catch(() => {})
 })
 
 // ---- sending ----
@@ -213,6 +213,20 @@ async function onMessage(message, sender) {
       const state = await tabState(message.tabId)
       const pageUrl = state.pageUrl || message.pageUrl || ''
       return { pageUrl, title: state.title || message.title || '', videoHost: isVideoHost(pageUrl), items: itemsOf({ ...state, pageUrl }) }
+    }
+    case 'extract': {
+      // Cached per tab and page so reopening the popup does not rerun yt-dlp.
+      await ready
+      const key = `extract:${message.tabId}`
+      const cached = (await chrome.storage.session.get(key))[key]
+      if (!message.force && cached?.url === message.url) return { ok: true, result: cached.result }
+      try {
+        const result = await extractMedia(settings, message.url)
+        chrome.storage.session.set({ [key]: { url: message.url, result } }).catch(() => {})
+        return { ok: true, result }
+      } catch (error) {
+        return { ok: false, error: error.message }
+      }
     }
     case 'health':
       await ready

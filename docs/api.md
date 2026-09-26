@@ -24,6 +24,16 @@ Base path `/api/ui`, JSON unless noted. Errors: `{"error": "..."}`.
 - `GET /api/ui/jobs/{id}/preview` — JPEG thumbnail for image/video outputs, 404 when
   the node cannot make one.
 
+## Media
+
+- `POST /api/ui/media/extract` — `{url, nodeId?}`. Runs yt-dlp on a node (the given one or the
+  fastest online node with `YTDLP`) over the page without downloading and returns
+  `{url, kind, title, extractor, durationSeconds?, thumbnail?, sizeBytes?, entries[], entryCount, truncated, nodeId, nodeName}`.
+  `kind` is `video` (one video; `url` is the page to send as a `YTDLP` job) or `playlist`
+  (playlists, channels, pages with several embedded videos; each entry has `url`, `title`,
+  `durationSeconds`, `thumbnail`). Errors: 422 with the yt-dlp message, 409 when no node with
+  yt-dlp is online, 501 when the nodes are too old for this endpoint. Can take up to 2 minutes.
+
 ## Nodes
 
 - `GET /api/ui/nodes?enabled=true`

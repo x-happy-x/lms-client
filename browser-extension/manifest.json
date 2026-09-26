@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LMS — загрузки через роутер",
   "short_name": "LMS",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Находит на странице видео, файлы и magnet-ссылки, перехватывает загрузки и отправляет их в LMS на роутере.",
   "minimum_chrome_version": "116",
   "icons": {

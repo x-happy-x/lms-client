@@ -45,6 +45,10 @@ func (f fakeNodeClient) RetryJob(ctx context.Context, node domain.Node, remoteJo
 func (f fakeNodeClient) MoveJobOutput(context.Context, domain.Node, string, *string) (domain.NodeJobStatusResponse, error) {
 	return domain.NodeJobStatusResponse{}, errors.New("unexpected")
 }
+func (f fakeNodeClient) ExtractMedia(context.Context, domain.Node, string) (domain.NodeMediaExtractResponse, error) {
+	return domain.NodeMediaExtractResponse{}, nil
+}
+
 func (f fakeNodeClient) SetSpeedLimit(context.Context, domain.Node, string, *int64) (domain.NodeJobStatusResponse, error) {
 	return domain.NodeJobStatusResponse{}, errors.New("unexpected")
 }
