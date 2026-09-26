@@ -230,6 +230,7 @@ func NewHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/ui/system/health", h.health)
 	mux.HandleFunc("/api/ui/system/version", h.versionInfo)
 	mux.HandleFunc("/api/ui/jobs/preflight", h.preflightJob)
+	mux.HandleFunc("/api/ui/media/extract", h.extractMedia)
 	mux.HandleFunc("/api/ui/jobs", h.jobsRoot)
 	mux.HandleFunc("/api/ui/jobs/", h.jobsByID)
 	mux.HandleFunc("/api/ui/nodes", h.nodesRoot)

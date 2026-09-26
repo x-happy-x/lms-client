@@ -22,6 +22,9 @@
     <section class="page">
       <div class="page-title" id="page-title"></div>
       <div class="row">
+        <button id="extract" class="btn" title="yt-dlp на ноде найдёт видео и плейлисты на этой странице">Найти через yt-dlp</button>
+      </div>
+      <div class="row">
         <button id="send-page" class="btn">Отправить страницу (yt-dlp)</button>
         <label class="speed" title="Ограничение скорости для отправки">
           <select id="speed">
@@ -35,6 +38,8 @@
         </label>
       </div>
     </section>
+
+    <section id="ytdlp" class="ytdlp" hidden></section>
 
     <form id="quick" class="row quick">
       <input id="quick-url" type="text" placeholder="Ссылка или magnet:" autocomplete="off" />

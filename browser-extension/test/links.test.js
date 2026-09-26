@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { downloadKind, shouldIntercept, sniffKind } from '../lib/intercept.js'
 import { displayName, isDownloadable, kindFromContentType, kindOf, normalizeCandidates, normalizeRouterUrl, suggestType } from '../lib/links.js'
-import { DEFAULT_SETTINGS, authHeaders, planJob, sendToRouter } from '../lib/router.js'
+import { DEFAULT_SETTINGS, authHeaders, extractMedia, planJob, sendToRouter } from '../lib/router.js'
 
 test('kinds and job types', () => {
   assert.equal(kindOf('https://x.ru/a/Movie.MKV?x=1'), 'video')
@@ -130,4 +130,16 @@ test('router errors surface the API message', async () => {
   const fakeFetch = async () => ({ ok: false, status: 400, text: async () => '{"error":"url is required"}' })
   await assert.rejects(sendToRouter(settings, 'https://x.ru/a.zip', {}, fakeFetch), /url is required/)
   await assert.rejects(sendToRouter({ ...settings, routerUrl: '' }, 'https://x.ru/a.zip', {}, fakeFetch), /адрес LMS/)
+})
+
+test('extractMedia posts the page to the router', async () => {
+  const calls = []
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init })
+    return { ok: true, status: 200, text: async () => '{"kind":"playlist","entries":[{"url":"https://x.ru/a"}]}' }
+  }
+  const result = await extractMedia(settings, 'https://x.ru/list', fakeFetch)
+  assert.equal(result.entries[0].url, 'https://x.ru/a')
+  assert.equal(calls[0].url, 'http://192.168.1.1:8082/api/ui/media/extract')
+  assert.deepEqual(JSON.parse(calls[0].init.body), { url: 'https://x.ru/list' })
 })

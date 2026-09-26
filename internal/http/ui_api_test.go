@@ -302,6 +302,10 @@ func (s *stubNodeClient) MoveJobOutput(context.Context, domain.Node, string, *st
 	path := "/tmp/moved.bin"
 	return domain.NodeJobStatusResponse{Status: "DONE", OutputPath: &path}, nil
 }
+func (s *stubNodeClient) ExtractMedia(context.Context, domain.Node, string) (domain.NodeMediaExtractResponse, error) {
+	return domain.NodeMediaExtractResponse{}, nil
+}
+
 func (s *stubNodeClient) SetSpeedLimit(context.Context, domain.Node, string, *int64) (domain.NodeJobStatusResponse, error) {
 	return domain.NodeJobStatusResponse{Status: "RUNNING"}, nil
 }

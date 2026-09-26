@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -252,5 +253,44 @@ func TestStreamClientHasNoWholeResponseTimeout(t *testing.T) {
 	}
 	if c.streamClient.Transport.(*http.Transport).ResponseHeaderTimeout < 30*time.Second {
 		t.Fatalf("header timeout should be at least 30s")
+	}
+}
+
+func TestExtractMediaOutlivesDefaultTimeoutAndMapsErrors(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/jobs/extract" || r.Header.Get("X-Signature") == "" {
+			http.Error(w, "unexpected", http.StatusBadRequest)
+			return
+		}
+		var req map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(req["url"], "bad") {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			_, _ = w.Write([]byte(`{"error":"Unsupported URL: ` + req["url"] + `"}`))
+			return
+		}
+		time.Sleep(120 * time.Millisecond) // longer than DefaultTimeout: yt-dlp takes time
+		_, _ = w.Write([]byte(`{"url":"` + req["url"] + `","kind":"playlist","title":"Mix","entries":[{"url":"https://e/a","title":"A","durationSeconds":5}],"entryCount":1,"truncated":false}`))
+	}))
+	defer server.Close()
+
+	c := NewClient(ClientConfig{DefaultTimeout: 50 * time.Millisecond, MaxAttempts: 1})
+	node := domain.Node{BaseURL: server.URL, ClientID: "router-main", Secret: "s"}
+
+	result, err := c.ExtractMedia(context.Background(), node, "https://e/list")
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if result.Kind != "playlist" || len(result.Entries) != 1 || result.Entries[0].URL != "https://e/a" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+
+	_, err = c.ExtractMedia(context.Background(), node, "https://e/bad")
+	var nodeErr *NodeError
+	if !errors.As(err, &nodeErr) || nodeErr.Status != http.StatusUnprocessableEntity || nodeErr.Message != "Unsupported URL: https://e/bad" {
+		t.Fatalf("expected NodeError 422, got %v", err)
 	}
 }

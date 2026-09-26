@@ -28,8 +28,20 @@ type ClientConfig struct {
 	Rand           *rand.Rand
 }
 
+// NodeError is a 4xx answer from the node with its {"error": "..."} message.
+type NodeError struct {
+	Status  int
+	Message string
+}
+
+func (e *NodeError) Error() string {
+	return fmt.Sprintf("node returned %d: %s", e.Status, e.Message)
+}
+
 type Client struct {
 	httpClient *http.Client
+	// slowClient is for requests where the node runs a tool before answering (yt-dlp extraction).
+	slowClient *http.Client
 	// streamClient has no overall timeout: file bodies can take hours to transfer.
 	streamClient *http.Client
 	cfg          ClientConfig
@@ -54,6 +66,7 @@ func NewClient(cfg ClientConfig) *Client {
 
 	return &Client{
 		httpClient:   &http.Client{Timeout: cfg.DefaultTimeout},
+		slowClient:   &http.Client{Timeout: 2 * time.Minute},
 		streamClient: newStreamClient(cfg.DefaultTimeout),
 		cfg:          cfg,
 	}
@@ -171,6 +184,39 @@ func (c *Client) PreflightJob(ctx context.Context, node domain.Node, url string)
 		return domain.NodeJobPreflightResponse{}, err
 	}
 	return result, nil
+}
+
+// ExtractMedia asks the node's yt-dlp what the page at url contains. yt-dlp errors come back
+// as *NodeError (422 with its message).
+func (c *Client) ExtractMedia(ctx context.Context, node domain.Node, pageURL string) (domain.NodeMediaExtractResponse, error) {
+	body, err := json.Marshal(map[string]string{"url": pageURL})
+	if err != nil {
+		return domain.NodeMediaExtractResponse{}, err
+	}
+	resp, err := c.do(ctx, c.slowClient, node, http.MethodPost, "/api/jobs/extract", bytes.NewReader(body), nil, true)
+	if err != nil {
+		return domain.NodeMediaExtractResponse{}, err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return domain.NodeMediaExtractResponse{}, fmt.Errorf("read node response: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		var apiErr struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(respBody, &apiErr)
+		if apiErr.Error == "" {
+			apiErr.Error = strings.TrimSpace(string(respBody))
+		}
+		return domain.NodeMediaExtractResponse{}, &NodeError{Status: resp.StatusCode, Message: apiErr.Error}
+	}
+	var out domain.NodeMediaExtractResponse
+	if err := json.Unmarshal(respBody, &out); err != nil {
+		return domain.NodeMediaExtractResponse{}, fmt.Errorf("decode node response: %w", err)
+	}
+	return out, nil
 }
 
 // OpenJobOutput streams a job's output file from the node. Range/If-Range headers are
