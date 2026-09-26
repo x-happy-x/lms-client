@@ -1,4 +1,4 @@
-export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'settings'
+export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'extension' | 'settings'
 export type ThemeMode = 'system' | 'light' | 'dark'
 
 export type JobStatus = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'DONE' | 'ERROR' | 'CANCELED'
@@ -24,6 +24,7 @@ export type Job = {
   outputPath?: string
   outputSizeBytes?: number
   errorText?: string
+  maxSpeedBytes?: number
 }
 
 export type NodeStatus = 'online' | 'offline' | 'never_seen' | 'disabled' | 'unknown'
