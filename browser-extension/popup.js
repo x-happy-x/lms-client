@@ -368,8 +368,8 @@ async function checkRouter() {
     return
   }
   const result = await chrome.runtime.sendMessage({ type: 'health' })
-  status.textContent = result?.ok ? 'на связи' : 'нет связи'
-  status.className = `pill ${result?.ok ? 'ok' : 'error'}`
+  status.textContent = result?.ok ? 'на связи' : result?.authRequired ? 'нужен вход' : 'нет связи'
+  status.className = `pill ${result?.ok ? 'ok' : result?.authRequired ? 'warn' : 'error'}`
   status.title = result?.error || normalizeRouterUrl(settings.routerUrl)
 }
 

@@ -61,3 +61,12 @@ test('a website content script cannot start login, logout or inspect the Account
     assert.match(result.error, /только из окна расширения/)
   }
 })
+
+test('an authentication challenge is reported separately from a connection failure', async () => {
+  const previous = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Войдите через Account' }), { status: 401 })
+    const result = await message({ type: 'health', settings: { routerUrl: 'https://lms.example' } })
+    assert.deepEqual(result, { ok: false, error: 'Войдите через Account', authRequired: true })
+  } finally { globalThis.fetch = previous }
+})
