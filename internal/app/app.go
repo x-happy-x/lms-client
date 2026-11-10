@@ -60,6 +60,8 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		logger,
 	)
 	handler := httpapi.NewHandler(httpapi.Dependencies{
+		AccountOrigin: os.Getenv("ROUTERD_ACCOUNT_ORIGIN"),
+		PublicOrigin:  os.Getenv("ROUTERD_PUBLIC_ORIGIN"),
 		DB:            db.SQL,
 		Version:       version,
 		JobRepo:       jobRepo,
