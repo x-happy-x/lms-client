@@ -258,7 +258,7 @@ async function onMessage(message, sender) {
         await health(await routerSettings(message.settings ? { ...settings, ...message.settings } : settings))
         return { ok: true }
       } catch (error) {
-        return { ok: false, error: error.message }
+        return { ok: false, error: error.message, authRequired: error.status === 401 }
       }
     default:
       return null
