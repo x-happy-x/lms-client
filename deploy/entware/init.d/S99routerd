@@ -8,6 +8,13 @@ PIDFILE=/opt/var/run/routerd.pid
 LOGFILE=/opt/var/log/routerd.log
 PATH=/opt/sbin:/opt/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
+# Installed separately on the router; preserved across binary/UI deployments.
+if [ -f /opt/routerd/config/account.env ]; then
+    set -a
+    . /opt/routerd/config/account.env
+    set +a
+fi
+
 is_running() {
     if [ -f "$PIDFILE" ]; then
         PID="$(cat "$PIDFILE" 2>/dev/null)"

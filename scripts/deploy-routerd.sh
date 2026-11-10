@@ -31,7 +31,8 @@ LINK_INITD="${LINK_INITD:-1}"
 LINK_NGINX="${LINK_NGINX:-1}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
-HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:18080/api/ui/system/health}"
+PRESERVE_CONFIG="${PRESERVE_CONFIG:-1}"
+HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:18080/api/ui/auth/config}"
 
 if [[ -z "${ROUTER_HOST}" ]]; then
   echo "ERROR: ROUTER_HOST is required"
@@ -73,7 +74,7 @@ mkdir -p "${BUILD_DIR}"
 echo "[1/6] Build routerd binary (${GOOS}/${GOARCH}, GOMIPS=${GOMIPS})"
 cd "${REPO_ROOT}"
 CGO_ENABLED="${CGO_ENABLED}" GOOS="${GOOS}" GOARCH="${GOARCH}" GOMIPS="${GOMIPS}" \
-  go build -o "${BUILD_DIR}/routerd" ./cmd/routerd
+  go build -buildvcs=false -o "${BUILD_DIR}/routerd" ./cmd/routerd
 
 if [[ "${SKIP_FRONTEND}" != "1" ]]; then
   echo "[2/6] Build frontend"
@@ -109,7 +110,7 @@ tar -cf - \
   deploy/entware/init.d/S99routerd \
   deploy/nginx/router.conf | "${SSH_BASE[@]}" "${SSH_TARGET}" "tar -xf - -C '${REMOTE_DIR}'"
 
-"${SSH_BASE[@]}" "${SSH_TARGET}" "mv -f '${REMOTE_DIR}/build/routerd' '${REMOTE_DIR}/bin/routerd'; mv -f '${REMOTE_DIR}/deploy/config.example.yml' '${REMOTE_DIR}/config/config.yml'; mv -f '${REMOTE_DIR}/deploy/entware/init.d/S98nginx-local-conf' '${REMOTE_DIR}/init.d/S98nginx-local-conf'; mv -f '${REMOTE_DIR}/deploy/entware/init.d/S99routerd' '${REMOTE_DIR}/init.d/S99routerd'; mv -f '${REMOTE_DIR}/deploy/nginx/router.conf' '${REMOTE_DIR}/nginx/router.conf'; rm -rf '${REMOTE_DIR}/build' '${REMOTE_DIR}/deploy'"
+"${SSH_BASE[@]}" "${SSH_TARGET}" "set -eu; mv -f '${REMOTE_DIR}/build/routerd' '${REMOTE_DIR}/bin/routerd'; if [ '${PRESERVE_CONFIG}' != '1' ] || [ ! -f '${REMOTE_DIR}/config/config.yml' ]; then cp '${REMOTE_DIR}/deploy/config.example.yml' '${REMOTE_DIR}/config/config.yml'; fi; mv -f '${REMOTE_DIR}/deploy/entware/init.d/S98nginx-local-conf' '${REMOTE_DIR}/init.d/S98nginx-local-conf'; mv -f '${REMOTE_DIR}/deploy/entware/init.d/S99routerd' '${REMOTE_DIR}/init.d/S99routerd'; mv -f '${REMOTE_DIR}/deploy/nginx/router.conf' '${REMOTE_DIR}/nginx/router.conf'; rm -rf '${REMOTE_DIR}/build' '${REMOTE_DIR}/deploy'"
 
 if [[ "${SKIP_FRONTEND}" != "1" ]]; then
   echo "[5/6] Upload static UI"
