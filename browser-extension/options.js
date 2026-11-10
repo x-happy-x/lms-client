@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from './lib/router.js'
+import { initDownloadPreferences } from './lib/preferences.js'
 
 const $ = (id) => document.getElementById(id)
 const TEXT = ['routerUrl', 'username', 'password']
@@ -16,7 +17,7 @@ async function init() {
 
   for (const key of TEXT) {
     $(key).value = settings[key] || ''
-    $(key).addEventListener('change', () => save({ [key]: $(key).value.trim() }))
+    $(key).addEventListener('change', () => { settings[key] = $(key).value.trim(); save({ [key]: settings[key] }) })
   }
   for (const key of CHECKS) {
     $(key).checked = Boolean(settings[key])
@@ -46,6 +47,7 @@ async function init() {
     result.textContent = answer?.ok ? '✓ LMS отвечает' : answer?.error || 'Нет ответа'
     result.className = `result ${answer?.ok ? 'ok' : 'error'}`
   })
+  void initDownloadPreferences(settings)
 }
 
 void init()

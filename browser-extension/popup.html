@@ -39,6 +39,25 @@
       </div>
     </section>
 
+    <details class="download-preferences">
+      <summary>Качество и папка загрузки<span id="download-summary" class="preferences-summary"></span></summary>
+      <div class="preferences-body">
+        <div class="grid2">
+          <label class="field"><span>Качество видео</span><select id="videoMaxHeight">
+            <option value="0">Лучшее доступное</option><option value="2160">До 2160p · 4K</option><option value="1440">До 1440p</option><option value="1080">До 1080p · Full HD</option><option value="720">До 720p · HD</option><option value="480">До 480p</option><option value="360">До 360p</option>
+          </select></label>
+          <label class="field"><span>Контейнер видео</span><select id="videoContainer"><option value="auto">Автоматически</option><option value="mp4">MP4</option><option value="mkv">MKV</option></select></label>
+        </div>
+        <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио · M4A</label>
+        <p class="hint muted">Качество и формат применяются для yt-dlp. Для прямых HTTP-ссылок скачивается исходный файл.</p>
+        <div class="row"><label class="field grow"><span>Куда скачать · нода</span><select id="downloadNodeId"><option value="">Автоматически</option></select></label><button id="refresh-destinations" class="btn small" type="button">Обновить</button></div>
+        <label class="field"><span>Папка на ноде</span><input id="downloadPath" list="download-paths" placeholder="По умолчанию или, например, video/courses" autocomplete="off" /></label>
+        <datalist id="download-paths"></datalist>
+        <p id="destination-status" class="hint muted"></p>
+        <p class="hint muted">Выбор сохраняется и применяется к следующим загрузкам, в том числе из контекстного меню.</p>
+      </div>
+    </details>
+
     <section id="ytdlp" class="ytdlp" hidden></section>
 
     <form id="quick" class="row quick">

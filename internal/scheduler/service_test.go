@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,6 +15,40 @@ import (
 	"lms-router-control-plane/internal/domain"
 	"lms-router-control-plane/internal/store/sqlite"
 )
+
+func TestDispatchPreservesVideoOptionsAndDestination(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db := setupDB(t)
+	jobs := sqlite.NewJobRepository(db.SQL)
+	nodes := sqlite.NewNodeRepository(db.SQL)
+	now := time.Now().UTC()
+	node := domain.Node{ID: "n", Name: "node", BaseURL: "https://node", Enabled: true, CreatedAt: now, UpdatedAt: now}
+	if err := nodes.Create(ctx, node); err != nil {
+		t.Fatal(err)
+	}
+	height, playlist, folder := 720, true, "courses"
+	options := &domain.YtDlpOptions{MaxHeight: &height, Container: "mkv", Playlist: &playlist}
+	job := domain.Job{ID: "j", CreatedAt: now, UpdatedAt: now, Type: domain.JobTypeYTDLP, URL: "https://example.com/list", Status: domain.JobStatusQueued, YtdlpOptions: options, StoragePath: &folder}
+	if err := jobs.Create(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	client := fakeNodeClient{createFn: func(_ context.Context, _ domain.Node, req domain.NodeJobCreateRequest) (domain.NodeJobCreateResponse, error) {
+		called = true
+		if !reflect.DeepEqual(req.YtdlpOptions, options) || req.StoragePath == nil || *req.StoragePath != folder {
+			t.Fatalf("options lost: %+v", req)
+		}
+		return domain.NodeJobCreateResponse{JobID: "remote"}, nil
+	}}
+	service := NewService(jobs, nodes, client, Config{}, nil)
+	if err := service.dispatchQueued(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("job was not dispatched")
+	}
+}
 
 type fakeNodeClient struct {
 	createFn func(ctx context.Context, node domain.Node, req domain.NodeJobCreateRequest) (domain.NodeJobCreateResponse, error)

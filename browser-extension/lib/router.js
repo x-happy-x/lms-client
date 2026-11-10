@@ -1,5 +1,6 @@
 // Router (lms-client /api/ui) client used by the service worker and popup.
 import { normalizeRouterUrl, suggestType } from './links.js'
+import { videoOptions as savedVideoOptions } from './preferences.js'
 
 export const DEFAULT_SETTINGS = {
   routerUrl: '',
@@ -11,6 +12,11 @@ export const DEFAULT_SETTINGS = {
   interceptMagnets: true,
   sniffMedia: true,
   maxSpeedBytes: 0,
+  downloadNodeId: '',
+  downloadPath: '',
+  videoMaxHeight: 0,
+  videoAudioOnly: false,
+  videoContainer: 'auto',
   notifications: true
 }
 
@@ -42,7 +48,15 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
  * playlist / page with several videos as `entries`. Slow on big playlists (up to ~2 min).
  */
 export function extractMedia(settings, url, fetchImpl) {
-  return request(settings, '/media/extract', { method: 'POST', body: JSON.stringify({ url }) }, fetchImpl)
+  return request(settings, '/media/extract', { method: 'POST', body: JSON.stringify({ url, nodeId: settings.downloadNodeId || undefined }) }, fetchImpl)
+}
+
+export function listNodes(settings, fetchImpl) {
+  return request(settings, '/nodes?enabled=true', {}, fetchImpl)
+}
+
+export function storageTargets(settings, nodeId, fetchImpl) {
+  return request(settings, `/nodes/${encodeURIComponent(nodeId)}/storage/targets`, {}, fetchImpl)
 }
 
 export function health(settings, fetchImpl) {
@@ -53,12 +67,18 @@ export function health(settings, fetchImpl) {
  * Picks node, type and folder from a preflight answer. The wanted type wins when the node
  * supports it; otherwise the node's recommendation. Nodes that cannot take the link are skipped.
  */
-export function planJob(preflight, url, wantedType) {
+export function planJob(preflight, url, wantedType, preferredNodeId) {
   const wanted = wantedType || suggestType(url)
   const usable = (preflight?.nodes || []).filter((node) => node.supportedTypes?.length && !node.error)
   if (!usable.length) {
     const reason = (preflight?.nodes || []).map((node) => node.error || (node.status !== 'online' && node.statusText)).find(Boolean)
     throw new Error(reason || 'Нет нод, которые могут скачать эту ссылку')
+  }
+  if (preferredNodeId) {
+    const selected = usable.find((node) => node.nodeId === preferredNodeId)
+    if (!selected) throw new Error('Выбранная нода недоступна. Выберите другую ноду или автоматический выбор.')
+    if (!selected.supportedTypes.includes(wanted)) throw new Error(`Выбранная нода не поддерживает ${wanted}`)
+    return { nodeId: selected.nodeId, nodeName: selected.nodeName, type: wanted, storagePath: selected.defaultStoragePath || undefined }
   }
   const withWanted = usable.filter((node) => node.supportedTypes.includes(wanted))
   const pool = withWanted.length ? withWanted : usable
@@ -68,9 +88,23 @@ export function planJob(preflight, url, wantedType) {
 }
 
 /** Preflight + create; returns the created job and where it went. */
-export async function sendToRouter(settings, url, { type, maxSpeedBytes } = {}, fetchImpl) {
+export async function sendToRouter(settings, url, { type, maxSpeedBytes, nodeId, storagePath, ytdlpOptions } = {}, fetchImpl) {
   const preflight = await request(settings, '/jobs/preflight', { method: 'POST', body: JSON.stringify({ url }) }, fetchImpl)
-  const plan = planJob(preflight, url, type)
+  const videoOptions = ytdlpOptions || savedVideoOptions(settings)
+  const needsOptions = (type || suggestType(url)) === 'YTDLP' && Object.keys(videoOptions).length > 0
+  let candidates = preflight
+  if (needsOptions) {
+    candidates = { ...preflight, nodes: (preflight.nodes || []).filter((node) => node.ytdlpOptionsSupported) }
+    const preferred = nodeId ?? settings.downloadNodeId
+    if (!candidates.nodes.length || (preferred && !candidates.nodes.some((node) => node.nodeId === preferred))) {
+      throw new Error('Для качества и плейлистов обновите lms-node и lms-client. Выбранная нода не сообщает поддержку параметров yt-dlp.')
+    }
+  }
+  const plan = planJob(candidates, url, type, nodeId ?? settings.downloadNodeId)
+  plan.storagePath = (storagePath ?? settings.downloadPath)?.trim() || plan.storagePath
+  if (type === 'YTDLP' && plan.type !== 'YTDLP' && Object.keys(videoOptions).length) {
+    throw new Error('Нет ноды с yt-dlp для выбранных параметров видео')
+  }
   const limit = maxSpeedBytes ?? settings.maxSpeedBytes
   const job = await request(
     settings,
@@ -83,7 +117,8 @@ export async function sendToRouter(settings, url, { type, maxSpeedBytes } = {}, 
         nodeId: plan.nodeId,
         storagePath: plan.storagePath,
         startImmediately: true,
-        maxSpeedBytes: limit > 0 ? limit : undefined
+        maxSpeedBytes: limit > 0 ? limit : undefined,
+        ytdlpOptions: plan.type === 'YTDLP' && Object.keys(videoOptions).length ? videoOptions : undefined
       })
     },
     fetchImpl

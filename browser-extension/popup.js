@@ -1,5 +1,6 @@
 import { extensionOf, hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType } from './lib/links.js'
 import { DEFAULT_SETTINGS } from './lib/router.js'
+import { initDownloadPreferences, videoOptions } from './lib/preferences.js'
 
 const KIND_LABEL = {
   video: 'Видео',
@@ -96,7 +97,7 @@ function el(tag, props = {}, children = []) {
   return node
 }
 
-async function send(url, linkType, statusNode, button) {
+async function send(url, linkType, statusNode, button, { playlist = false } = {}) {
   if (button) button.disabled = true
   const cardButton = button?.classList.contains('card-send')
   if (cardButton) {
@@ -107,7 +108,11 @@ async function send(url, linkType, statusNode, button) {
   statusNode.className = 'result muted'
   const speed = Number($('speed').value) || 0
   let result
-  try { result = await chrome.runtime.sendMessage({ type: 'send', url, linkType, maxSpeedBytes: speed, quiet: true }) }
+  try { result = await chrome.runtime.sendMessage({
+    type: 'send', url, linkType, maxSpeedBytes: speed, quiet: true,
+    nodeId: settings.downloadNodeId, storagePath: $('downloadPath').value.trim(),
+    ytdlpOptions: linkType === 'YTDLP' ? videoOptions(settings, playlist) : undefined
+  }) }
   catch (error) { result = { error: error.message } }
   if (result?.ok) {
     statusNode.replaceChildren(icon('check'), el('span', { textContent: `${result.nodeName || 'нода'} · ${TYPES.find(([key]) => key === result.type)?.[1] || result.type}` }))
@@ -154,7 +159,8 @@ function renderItems(items) {
       { className: 'type', title: 'Способ загрузки', ariaLabel: 'Способ загрузки' },
       TYPES.map(([value, label]) => el('option', { value, textContent: label }))
     )
-    typeSelect.value = item.kind === 'stream' ? 'YTDLP' : suggestType(item.url)
+    const mediaPreferences = settings.videoMaxHeight || settings.videoAudioOnly || settings.videoContainer !== 'auto'
+    typeSelect.value = item.kind === 'stream' || (['video', 'audio'].includes(item.kind) && mediaPreferences) ? 'YTDLP' : suggestType(item.url)
     const status = el('div', { className: 'result', role: 'status' })
     const button = downloadButton()
     button.addEventListener('click', () => send(item.url, typeSelect.value, status, button))
@@ -215,10 +221,9 @@ function renderExtract(result) {
 
   const entries = result.entries || []
   const total = result.entryCount || entries.length
-  box.append(el('h2', { className: 'section-title', textContent: `yt-dlp: ${result.title || 'плейлист'} · ${total} видео${node}` }))
+  box.append(el('h2', { className: 'section-title', textContent: `Плейлист${node}` }))
   if (!entries.length) {
-    box.append(el('p', { className: 'empty muted', textContent: 'Список пуст.' }))
-    return
+    box.append(el('p', { className: 'hint muted', textContent: 'Список роликов недоступен. Можно отправить весь плейлист.' }))
   }
 
   const checks = []
@@ -243,7 +248,7 @@ function renderExtract(result) {
   const selectedCount = () => checks.filter((item) => item.check.checked).length
   const sendSelected = el('button', { className: 'btn primary small' })
   const refreshLabel = () => {
-    sendSelected.textContent = `Выбранные (${selectedCount()})`
+    sendSelected.textContent = `Скачать выбранные (${selectedCount()})`
     sendSelected.disabled = selectedCount() === 0
   }
   checks.forEach((item) => item.check.addEventListener('change', refreshLabel))
@@ -256,9 +261,9 @@ function renderExtract(result) {
     refreshLabel()
   })
 
-  const whole = el('button', { className: 'btn small', textContent: 'Весь плейлист одной загрузкой' })
-  const summary = el('div', { className: 'result' })
-  whole.addEventListener('click', () => send(result.url, 'YTDLP', summary, whole))
+  const whole = el('button', { className: 'btn primary playlist-download' }, [icon('download'), el('span', { textContent: 'Скачать весь плейлист' })])
+  const summary = el('div', { className: 'result', role: 'status' })
+  whole.addEventListener('click', () => send(result.url, 'YTDLP', summary, whole, { playlist: true }))
 
   sendSelected.addEventListener('click', async () => {
     const chosen = checks.filter((item) => item.check.checked && !item.sent)
@@ -280,7 +285,11 @@ function renderExtract(result) {
     refreshLabel()
   })
 
-  box.append(el('div', { className: 'row wrap' }, [sendSelected, whole, toggle]), summary, list)
+  box.append(el('div', { className: 'playlist-summary' }, [
+    el('div', { className: 'name', textContent: result.title || 'Плейлист', title: result.title || '' }),
+    el('p', { className: 'hint muted', textContent: `${total || 'Все'} видео · одна задача · отдельная папка` }),
+    whole
+  ]), summary, el('div', { className: 'row wrap' }, [sendSelected, toggle]), list)
   if (result.truncated) {
     box.append(el('p', { className: 'muted small', textContent: `Показаны первые ${entries.length} — для остальных отправьте весь плейлист.` }))
   }
@@ -374,6 +383,12 @@ async function init() {
   })
 
   renderItems(data?.items || [])
+  void initDownloadPreferences(settings, () => {
+    if (!settings.videoMaxHeight && !settings.videoAudioOnly && settings.videoContainer === 'auto') return
+    for (const entry of itemRows.values()) {
+      if (['video', 'audio', 'stream'].includes(entry.kind)) entry.select.value = 'YTDLP'
+    }
+  })
   let refreshTimer = 0
   const refresh = async () => {
     const latest = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id })

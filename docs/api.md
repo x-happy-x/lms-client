@@ -6,9 +6,16 @@ Base path `/api/ui`, JSON unless noted. Errors: `{"error": "..."}`.
 
 - `POST /api/ui/jobs/preflight` — `{url}`; per-node supported types, size, default path.
   Magnet links skip the HTTP probe and offer `TORRENT` on online nodes.
-- `POST /api/ui/jobs` — `{type, url, storagePath?, profileId?, nodeId?, startImmediately?, maxSpeedBytes?}`.
+  `ytdlpOptionsSupported` is true for nodes that accept quality and playlist options.
+- `POST /api/ui/jobs` — `{type, url, storagePath?, profileId?, nodeId?, startImmediately?, maxSpeedBytes?, ytdlpOptions?}`.
   Types: `DIRECT`, `YTDLP`, `ARIA2C`, `TORRENT`. URLs: `http(s)://` for all types,
   `magnet:?` only for `TORRENT`.
+  `ytdlpOptions` is only valid for `YTDLP`: `{maxHeight?: 144..4320, audioOnly?: boolean,
+  container?: "auto"|"mp4"|"mkv", playlist?: boolean}`. Height is an upper limit;
+  audio-only produces M4A. Playlist mode uses one node job and returns a directory
+  containing all entries, with stable numbered filenames. Options persist through
+  pauses, retries and restarts (SQLite migration 005) and are included in job responses.
+  Upgrade lms-node (LMS-11) before the router/extension (LMSC-7).
 - `GET /api/ui/jobs?active=true`
 - `GET /api/ui/jobs/{id}`
 - `POST /api/ui/jobs/{id}/cancel|pause|resume|retry` — body `{}`
@@ -20,7 +27,7 @@ Base path `/api/ui`, JSON unless noted. Errors: `{"error": "..."}`.
 - `GET|HEAD /api/ui/jobs/{id}/file` — streams the job output from its node (not JSON).
   `Range`/`If-Range` are forwarded (206/416 pass through), so downloads resume and
   videos seek. `?inline=1` sets `Content-Disposition: inline` for viewing in the browser.
-  Folder outputs (torrents) come as a ZIP. 409 when the job has no output on a node yet.
+  Folder outputs (torrents and playlists) come as a ZIP. 409 when the job has no output on a node yet.
 - `GET /api/ui/jobs/{id}/preview` — JPEG thumbnail for image/video outputs, 404 when
   the node cannot make one.
 

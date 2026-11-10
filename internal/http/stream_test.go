@@ -20,6 +20,53 @@ import (
 
 const streamPayload = "0123456789abcdefghij"
 
+func TestVideoOptionsAreValidatedAndStoredWithDestination(t *testing.T) {
+	t.Parallel()
+	f := newStreamFixture(t)
+	resp, err := http.Post(f.server.URL+"/api/ui/jobs", "application/json", strings.NewReader(
+		`{"type":"YTDLP","url":"https://example.com/list","storagePath":"courses","ytdlpOptions":{"maxHeight":1080,"container":"mp4","playlist":true}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status: %d", resp.StatusCode)
+	}
+	var created jobResponse
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := f.jobRepo.GetByID(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.YtdlpOptions == nil || *stored.YtdlpOptions.MaxHeight != 1080 || !*stored.YtdlpOptions.Playlist || *stored.StoragePath != "courses" {
+		t.Fatalf("options or destination lost: %+v", stored)
+	}
+	stored.Message = new(string)
+	if err := f.jobRepo.Update(context.Background(), stored); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := f.jobRepo.List(context.Background(), false)
+	if err != nil || listed[0].YtdlpOptions.Container != "mp4" {
+		t.Fatalf("options lost on update/list: %v %v", listed, err)
+	}
+	for _, body := range []string{
+		`{"type":"DIRECT","url":"https://example.com/v","ytdlpOptions":{"playlist":true}}`,
+		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"maxHeight":10000}}`,
+		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"container":"--exec"}}`,
+	} {
+		r, err := http.Post(f.server.URL+"/api/ui/jobs", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		if r.StatusCode != http.StatusBadRequest {
+			t.Fatalf("invalid options accepted: %s: %d", body, r.StatusCode)
+		}
+	}
+}
+
 // fileStubNodeClient serves a fixed file with real Range handling (http.ServeContent).
 type fileStubNodeClient struct {
 	stubNodeClient
