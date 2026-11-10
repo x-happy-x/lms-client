@@ -1,10 +1,11 @@
 package domain
 
 type NodeMediaRequest struct {
-	URL       string `json:"url"`
-	MaxHeight *int   `json:"maxHeight,omitempty"`
-	MaxFps    *int   `json:"maxFps,omitempty"`
-	Direct    bool   `json:"direct,omitempty"`
+	Impersonate string `json:"impersonate,omitempty"`
+	URL         string `json:"url"`
+	MaxHeight   *int   `json:"maxHeight,omitempty"`
+	MaxFps      *int   `json:"maxFps,omitempty"`
+	Direct      bool   `json:"direct,omitempty"`
 }
 type MediaVariant struct {
 	Height        int    `json:"height"`

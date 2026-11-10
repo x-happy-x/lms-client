@@ -90,6 +90,20 @@
         <label class="check"><input id="notifications" type="checkbox" /> Показывать уведомления</label>
       </section>
 
+      <section class="card" id="ytdlp-diagnostics">
+        <h2>Диагностика yt-dlp на ноде</h2>
+        <p class="hint muted">Ручная проверка без создания задания и скачивания видео.</p>
+        <form id="diagnostic-form">
+          <div class="grid2"><label class="field"><span>Нода для запроса</span><select id="diagnostic-node"><option value="">Автоматически</option></select></label><label class="field"><span>Режим</span><select id="diagnostic-mode"><option value="formats">Форматы · -F</option><option value="json">Метаданные · -J</option><option value="extract">Поиск роликов · flat-playlist</option><option value="version">Версия · --version</option><option value="profiles">Доступные профили</option></select></label></div>
+          <label class="field"><span>URL страницы или ролика</span><input id="diagnostic-url" type="url" placeholder="https://example.com/video" autocomplete="off" required /></label>
+          <label class="field"><span>Профиль этого запроса</span><select id="diagnostic-profile"><option value="">Обычный запрос</option></select></label>
+          <p id="diagnostic-profile-status" class="hint muted"></p>
+          <div class="row"><label class="check"><input id="diagnostic-verbose" type="checkbox" /> Подробный лог</label><span class="grow"></span><button id="diagnostic-run" class="btn primary" type="submit" disabled><span data-icon="play"></span>Выполнить</button></div>
+          <p id="diagnostic-access" class="hint muted"></p><p id="diagnostic-result" class="result" role="status"></p>
+        </form>
+        <div id="diagnostic-output" hidden><p class="hint muted">Команда на ноде</p><pre id="diagnostic-command" tabindex="0"></pre><p class="hint muted">stdout</p><pre id="diagnostic-stdout" tabindex="0"></pre><p class="hint muted">stderr</p><pre id="diagnostic-stderr" tabindex="0"></pre></div>
+      </section>
+
       <p id="saved" class="muted small">Изменения сохраняются сразу.</p>
     </main>
     <script type="module" src="options.js"></script>

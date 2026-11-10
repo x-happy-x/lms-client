@@ -13,8 +13,9 @@ import (
 )
 
 type mediaExtractRequest struct {
-	URL    string  `json:"url"`
-	NodeID *string `json:"nodeId,omitempty"`
+	Impersonate string  `json:"impersonate,omitempty"`
+	URL         string  `json:"url"`
+	NodeID      *string `json:"nodeId,omitempty"`
 }
 
 type mediaExtractResponse struct {
@@ -43,6 +44,10 @@ func (h *Handler) extractMedia(w http.ResponseWriter, r *http.Request) {
 		h.badRequest(w, err.Error())
 		return
 	}
+	if err := domain.ValidateImpersonation(req.Impersonate); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
 	req.URL = strings.TrimSpace(req.URL)
 	if !strings.HasPrefix(strings.ToLower(req.URL), "http://") && !strings.HasPrefix(strings.ToLower(req.URL), "https://") {
 		h.badRequest(w, "url must start with http:// or https://")
@@ -64,7 +69,24 @@ func (h *Handler) extractMedia(w http.ResponseWriter, r *http.Request) {
 
 	outdated := false
 	for _, node := range candidates {
-		result, err := h.nodeClient.ExtractMedia(ctx, node, req.URL)
+		var result domain.NodeMediaExtractResponse
+		var err error
+		if req.Impersonate != "" {
+			if err = h.checkMediaProfile(ctx, node, req.Impersonate); err != nil {
+				writeJSON(w, 409, map[string]string{"error": err.Error()})
+				return
+			}
+			extractor, ok := h.nodeClient.(interface {
+				ExtractMediaWithOptions(context.Context, domain.Node, string, string) (domain.NodeMediaExtractResponse, error)
+			})
+			if !ok {
+				writeJSON(w, 501, map[string]string{"error": "Обновите роутер для impersonation"})
+				return
+			}
+			result, err = extractor.ExtractMediaWithOptions(ctx, node, req.URL, req.Impersonate)
+		} else {
+			result, err = h.nodeClient.ExtractMedia(ctx, node, req.URL)
+		}
 		if err == nil {
 			writeJSON(w, http.StatusOK, mediaExtractResponse{NodeMediaExtractResponse: result, NodeID: node.ID, NodeName: node.Name})
 			return

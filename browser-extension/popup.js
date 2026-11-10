@@ -53,7 +53,7 @@ async function drainInfo() {
   const { row, generation } = infoQueue.shift()
   if (!row.isConnected || generation !== infoGeneration) { void drainInfo(); return }
   infoActive++
-  const key = `${row.dataset.mediaUrl}|${settings.downloadNodeId}|${settings.videoMaxHeight}|${settings.videoMaxFps}`
+  const key = `${row.dataset.mediaUrl}|${settings.downloadNodeId}|${settings.videoMaxHeight}|${settings.videoMaxFps}|${settings.videoImpersonate}`
   try {
     let result = infoCache.get(key)
     if (!result) {
@@ -610,9 +610,13 @@ async function init() {
 
   renderVideoCards(data?.videos || [], data?.currentVideo)
   renderItems(data?.items || [], data?.hiddenCount || 0)
-  void initDownloadPreferences(settings, () => {
+  void initDownloadPreferences(settings, (key) => {
     infoGeneration++; infoQueue.length = 0
     mediaOverrides.clear()
+    if (['videoImpersonate','downloadNodeId'].includes(key)) {
+      $('extract-feedback').textContent = ''
+      if (canExtract()) { extracted = true; void runExtract(tab?.id, mediaSourceUrl, true) }
+    }
     for (const row of document.querySelectorAll('[data-media-page]')) infoObserver.observe(row)
     if (!Object.keys(videoOptions(settings)).length) return
     for (const entry of itemRows.values()) {

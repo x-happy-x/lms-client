@@ -104,6 +104,10 @@ func (h *Handler) mediaStart(w http.ResponseWriter, r *http.Request, preview boo
 		h.badRequest(w, "Недопустимое качество")
 		return
 	}
+	if err := domain.ValidateImpersonation(req.Impersonate); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
 	token := tokenOf(r)
 	if preview && h.accountProtected && !accountTokenPattern.MatchString(token) {
 		writeJSON(w, 403, map[string]string{"error": "Для просмотра войдите через Account в расширении или веб-интерфейсе"})
@@ -119,6 +123,10 @@ func (h *Handler) mediaStart(w http.ResponseWriter, r *http.Request, preview boo
 	node := candidates[0]
 	if !node.Enabled {
 		writeJSON(w, 409, map[string]string{"error": "Выбранная нода отключена"})
+		return
+	}
+	if err := h.checkMediaProfile(ctx, node, req.Impersonate); err != nil {
+		writeJSON(w, 409, map[string]string{"error": err.Error()})
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")

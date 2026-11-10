@@ -2,7 +2,7 @@
 // media sniffing and sending links to the LMS router.
 import { shouldIntercept, downloadKind, sniffCandidate } from './lib/intercept.js'
 import { displayName, isHttp, isMagnet, isVideoHost, kindOf, normalizeCandidates, normalizeRouterUrl } from './lib/links.js'
-import { DEFAULT_SETTINGS, extractMedia, health, listNodes, storageTargets, sendToRouter, mediaInfo, prepareMedia, listJobs } from './lib/router.js'
+import { DEFAULT_SETTINGS, extractMedia, health, listNodes, storageTargets, sendToRouter, mediaInfo, prepareMedia, listJobs, mediaCapabilities, diagnoseMedia } from './lib/router.js'
 import { videoOptions } from './lib/preferences.js'
 import { canonicalVideoPage, dedupeVkMedia, isVkMedia } from './lib/media-source.js'
 import { normalizePlayers, groupPlayerSources } from './lib/player-groups.js'
@@ -261,10 +261,12 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 // ---- messages from content scripts and the popup ----
 
 async function onMessage(message, sender) {
-  if (['prepareStream', 'mediaInfo', 'jobProgress'].includes(message?.type)) {
+  if (['prepareStream', 'mediaInfo', 'jobProgress', 'mediaCapabilities', 'diagnose'].includes(message?.type)) {
     if (!sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('Доступно только из окна расширения')
     await ready
     const auth = await routerSettings(settings)
+    if (message.type === 'mediaCapabilities') return { ok: true, result: await mediaCapabilities(auth, message.nodeId) }
+    if (message.type === 'diagnose') return { ok: true, result: await diagnoseMedia(auth, message.input) }
     if (message.type === 'prepareStream') {
       const id = String(message.id || '')
       if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Некорректный сеанс просмотра')
@@ -350,7 +352,7 @@ async function onMessage(message, sender) {
       const auth = await routerSettings(settings)
       const key = `extract:${message.tabId}`
       const cached = (await chrome.storage.session.get(key))[key]
-      if (!message.force && cached?.url === message.url && cached.nodeId === settings.downloadNodeId && cached.routerUrl === settings.routerUrl && cached.accountSession === auth.accountSession) return { ok: true, result: cached.result, videos: await rememberVideo(message.tabId, cached.result) }
+      if (!message.force && cached?.url === message.url && cached.nodeId === settings.downloadNodeId && cached.routerUrl === settings.routerUrl && cached.accountSession === auth.accountSession && cached.impersonate === settings.videoImpersonate) return { ok: true, result: cached.result, videos: await rememberVideo(message.tabId, cached.result) }
       try {
         let result = await extractMedia(auth, message.url)
         if (result.kind === 'video') {
@@ -358,7 +360,7 @@ async function onMessage(message, sender) {
           result = { ...result, url, ...(result.url !== url ? { aliases: [result.url] } : {}) }
         }
         if (auth.accountSession !== (await routerSettings(settings)).accountSession) throw new Error('Аккаунт изменился. Повторите поиск видео.')
-        chrome.storage.session.set({ [key]: { url: message.url, nodeId: settings.downloadNodeId, routerUrl: settings.routerUrl, accountSession: auth.accountSession, result } }).catch(() => {})
+        chrome.storage.session.set({ [key]: { url: message.url, nodeId: settings.downloadNodeId, routerUrl: settings.routerUrl, accountSession: auth.accountSession, impersonate: settings.videoImpersonate, result } }).catch(() => {})
         return { ok: true, result, videos: await rememberVideo(message.tabId, result) }
       } catch (error) {
         return { ok: false, error: error.message }

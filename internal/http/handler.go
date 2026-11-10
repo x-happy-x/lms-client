@@ -86,21 +86,22 @@ type jobPreflightNodeOptionResponse struct {
 }
 
 type jobPreflightNodeResponse struct {
-	AdvancedOptionsSupported bool                             `json:"advancedOptionsSupported"`
-	YtdlpOptionsSupported    bool                             `json:"ytdlpOptionsSupported"`
-	NodeID                   string                           `json:"nodeId"`
-	NodeName                 string                           `json:"nodeName"`
-	Status                   string                           `json:"status"`
-	StatusText               string                           `json:"statusText"`
-	PingMs                   *int64                           `json:"pingMs,omitempty"`
-	URL                      string                           `json:"url"`
-	SizeBytes                *int64                           `json:"sizeBytes,omitempty"`
-	SizeKnown                bool                             `json:"sizeKnown"`
-	RecommendedType          string                           `json:"recommendedType,omitempty"`
-	SupportedTypes           []string                         `json:"supportedTypes"`
-	Options                  []jobPreflightNodeOptionResponse `json:"options"`
-	DefaultStoragePath       string                           `json:"defaultStoragePath,omitempty"`
-	Error                    *string                          `json:"error,omitempty"`
+	ImpersonationOptionsSupported bool                             `json:"impersonationOptionsSupported"`
+	AdvancedOptionsSupported      bool                             `json:"advancedOptionsSupported"`
+	YtdlpOptionsSupported         bool                             `json:"ytdlpOptionsSupported"`
+	NodeID                        string                           `json:"nodeId"`
+	NodeName                      string                           `json:"nodeName"`
+	Status                        string                           `json:"status"`
+	StatusText                    string                           `json:"statusText"`
+	PingMs                        *int64                           `json:"pingMs,omitempty"`
+	URL                           string                           `json:"url"`
+	SizeBytes                     *int64                           `json:"sizeBytes,omitempty"`
+	SizeKnown                     bool                             `json:"sizeKnown"`
+	RecommendedType               string                           `json:"recommendedType,omitempty"`
+	SupportedTypes                []string                         `json:"supportedTypes"`
+	Options                       []jobPreflightNodeOptionResponse `json:"options"`
+	DefaultStoragePath            string                           `json:"defaultStoragePath,omitempty"`
+	Error                         *string                          `json:"error,omitempty"`
 }
 
 type jobPreflightResponse struct {
@@ -244,6 +245,8 @@ func NewHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/ui/media/extract", h.extractMedia)
 	mux.HandleFunc("/api/ui/media/info", h.mediaInspect)
 	mux.HandleFunc("/api/ui/media/preview", h.mediaPrepare)
+	mux.HandleFunc("/api/ui/media/capabilities", h.mediaCapabilities)
+	mux.HandleFunc("/api/ui/media/diagnose", h.mediaDiagnose)
 	mux.HandleFunc("/api/ui/media/stream/", h.mediaStream)
 	mux.HandleFunc("/api/ui/jobs", h.jobsRoot)
 	mux.HandleFunc("/api/ui/jobs/", h.jobsByID)
@@ -350,6 +353,7 @@ func (h *Handler) preflightJob(w http.ResponseWriter, r *http.Request) {
 				item.DefaultStoragePath = resp.DefaultStoragePath
 				item.YtdlpOptionsSupported = resp.YtdlpOptionsSupported
 				item.AdvancedOptionsSupported = resp.AdvancedOptionsSupported
+				item.ImpersonationOptionsSupported = resp.ImpersonationOptionsSupported
 				for _, option := range resp.Options {
 					item.Options = append(item.Options, jobPreflightNodeOptionResponse{
 						Type:              option.Type,

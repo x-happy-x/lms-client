@@ -68,15 +68,16 @@ type NodeDownloadOption struct {
 }
 
 type NodeJobPreflightResponse struct {
-	YtdlpOptionsSupported    bool                 `json:"ytdlpOptionsSupported"`
-	AdvancedOptionsSupported bool                 `json:"advancedOptionsSupported"`
-	URL                      string               `json:"url"`
-	SizeBytes                *int64               `json:"sizeBytes"`
-	SizeKnown                bool                 `json:"sizeKnown"`
-	RecommendedType          string               `json:"recommendedType"`
-	SupportedTypes           []string             `json:"supportedTypes"`
-	Options                  []NodeDownloadOption `json:"options"`
-	DefaultStoragePath       string               `json:"defaultStoragePath"`
+	ImpersonationOptionsSupported bool                 `json:"impersonationOptionsSupported"`
+	YtdlpOptionsSupported         bool                 `json:"ytdlpOptionsSupported"`
+	AdvancedOptionsSupported      bool                 `json:"advancedOptionsSupported"`
+	URL                           string               `json:"url"`
+	SizeBytes                     *int64               `json:"sizeBytes"`
+	SizeKnown                     bool                 `json:"sizeKnown"`
+	RecommendedType               string               `json:"recommendedType"`
+	SupportedTypes                []string             `json:"supportedTypes"`
+	Options                       []NodeDownloadOption `json:"options"`
+	DefaultStoragePath            string               `json:"defaultStoragePath"`
 }
 
 // NodeMediaExtractResponse is what yt-dlp found at a URL on the node (POST /api/jobs/extract):
