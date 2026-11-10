@@ -3,7 +3,7 @@ import { extensionOf, hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType 
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences, videoOptions } from './lib/preferences.js'
 import { initAccountUI } from './lib/account-ui.js'
-import { isVkMedia } from './lib/media-source.js'
+import { isVkMedia, canonicalVideoPage } from './lib/media-source.js'
 
 const KIND_LABEL = {
   video: 'Видео',
@@ -28,9 +28,11 @@ const TYPES = [
 const $ = (id) => document.getElementById(id)
 let settings = { ...DEFAULT_SETTINGS }
 const itemRows = new Map()
+const videoRows = new Map()
 let onPlaylistActivate = () => {}
 let extractGeneration = 0
 let currentPageUrl = ''
+let sourceTabId
 let latestJobs = [], progressTimer = 0, progressBusy = false
 const mediaOverrides = new Map()
 const infoCache = new Map(), infoQueue = []
@@ -55,7 +57,7 @@ async function drainInfo() {
   try {
     let result = infoCache.get(key)
     if (!result) {
-      const answer = await chrome.runtime.sendMessage({ type: 'mediaInfo', url: row.dataset.mediaUrl, direct: row.dataset.mediaPage !== 'true' })
+      const answer = await chrome.runtime.sendMessage({ type: 'mediaInfo', url: row.dataset.mediaUrl, tabId: sourceTabId, direct: row.dataset.mediaPage !== 'true' })
       if (!answer?.ok) throw new Error(answer?.error || 'Сведения недоступны')
       result = answer.result; infoCache.set(key, result)
     }
@@ -153,7 +155,7 @@ function playButton(item, status) {
   button.addEventListener('click', async () => {
     try {
       const latest = itemRows.get(item.url)?.item || item
-      const answer = await chrome.runtime.sendMessage({ type: 'preview', item: { ...latest, ...mediaOverrides.get(item.url), sourceUrl: currentPageUrl } })
+      const answer = await chrome.runtime.sendMessage({ type: 'preview', item: { ...latest, ...mediaOverrides.get(item.url), sourceUrl: item.page ? item.url : currentPageUrl } })
       if (!answer?.ok) throw new Error(answer?.error || 'Не удалось открыть просмотр')
     } catch (error) { status.textContent = error.message; status.className = 'result error' }
   })
@@ -245,6 +247,8 @@ async function send(url, linkType, statusNode, button, { playlist = false } = {}
 }
 
 function renderItems(items, hiddenCount = 0) {
+  const hasVkVideo = [...videoRows.keys()].some(url => canonicalVideoPage(url))
+  items = items.filter(item => !videoRows.has(canonicalVideoPage(item.url) || item.url) && !(hasVkVideo && isVkMedia(item.url)))
   $('filter-status').hidden = hiddenCount === 0
   $('filter-status').textContent = hiddenCount ? `Скрыто фильтром: ${hiddenCount}` : ''
   const list = $('items')
@@ -296,13 +300,12 @@ function renderItems(items, hiddenCount = 0) {
     itemRows.set(item.url, entry)
   }
   updatePageCount()
-  let technical = 0
+  let music = 0
   for (const entry of itemRows.values()) {
-    if (isVkMedia(entry.item.url)) { if (entry.row.parentElement !== $('technical-items')) $('technical-items').append(entry.row); technical++ }
+    if (entry.item.kind === 'audio') { if (entry.row.parentElement !== $('music-items')) $('music-items').append(entry.row); music++ }
     else if (entry.row.parentElement !== list) list.append(entry.row)
   }
-  $('technical-streams').hidden = technical === 0
-  $('technical-count').textContent = technical ? `· ${technical}` : ''
+  $('music-section').hidden = music === 0
   paintProgress()
 }
 
@@ -327,26 +330,46 @@ function formatSize(bytes) {
 }
 
 /** yt-dlp results: one video, or playlist entries with checkboxes. */
-function renderExtract(result) {
+function renderVideoCards(videos = [], currentVideo = null) {
+  const entries = videos.map(video => ({ ...video, url: canonicalVideoPage(video.url) || video.url }))
+  if (currentVideo && !entries.some(video => video.url === currentVideo.url)) entries.unshift(currentVideo)
+  const urls = new Set(entries.map(video => video.url)), container = $('single-video')
+  for (const [url, entry] of videoRows) if (!urls.has(url)) { entry.row.remove(); videoRows.delete(url) }
+  for (const [index, video] of entries.entries()) {
+    const previous = videoRows.get(video.url), item = { ...video, name: video.title || video.url, kind: 'video', page: true }
+    let row
+    if (previous) {
+      row = previous.row
+      if (previous.item.title !== item.title || previous.item.thumbnail !== item.thumbnail || previous.item.durationSeconds !== item.durationSeconds) {
+        row.querySelector('.name').textContent = item.name; row.querySelector('.name').title = item.name
+        row.querySelector('.preview').replaceWith(preview(item))
+      }
+      Object.assign(previous.item, item)
+    } else {
+      const status = el('div', { className: 'result', role: 'status' }), button = downloadButton()
+      button.addEventListener('click', () => send(item.url, 'YTDLP', status, button))
+      row = mediaCard(item, [playButton(item, status), button], status, 'div')
+      row.querySelector('.media-meta').textContent = 'Качество и размер…'
+      videoRows.set(item.url, { row, item }); watchInfo(row, item)
+    }
+    if (container.children[index] !== row) container.insertBefore(row, container.children[index] || null)
+    const duplicate = itemRows.get(item.url)
+    if (duplicate) { duplicate.row.remove(); itemRows.delete(item.url) }
+  }
+  container.hidden = entries.length === 0
+  updatePageCount(); paintProgress()
+}
+
+function renderExtract(result, videos) {
   const box = $('ytdlp')
   box.replaceChildren()
   box.hidden = result.kind !== 'playlist'
-  $('single-video').hidden = true
-  $('single-video').replaceChildren()
   $('playlist-count').textContent = ''
   $('playlist-empty').hidden = result.kind === 'playlist'
 
   if (result.kind !== 'playlist') {
-    const status = el('div', { className: 'result', role: 'status' })
-    const button = downloadButton()
-    button.addEventListener('click', () => send(result.url, 'YTDLP', status, button))
-    $('single-video').hidden = false
-    $('empty').hidden = true
-    $('playlist-empty-text').textContent = 'Найден один ролик. Он находится во вкладке «На текущей странице».'
-    const item = { ...result, name: result.title || result.url, kind: 'video', page: true }
-    const row = mediaCard(item, [playButton(item, status), button], status, 'div')
-    $('single-video').append(row); watchInfo(row, item); paintProgress()
-    updatePageCount()
+    $('playlist-empty-text').textContent = 'Найденные ролики находятся во вкладке «На текущей странице».'
+    renderVideoCards(videos || [result, ...[...videoRows.values()].map(entry => entry.item).filter(item => item.url !== result.url)])
     return
   }
 
@@ -479,7 +502,7 @@ async function runExtract(tabId, url, force = false, activate = false) {
   button.setAttribute('aria-busy', 'false')
   if (answer?.ok) {
     feedback.textContent = ''
-    renderExtract(answer.result)
+    renderExtract(answer.result, answer.videos)
     if (activate) selectTab(answer.result.kind === 'playlist' ? 'playlist' : 'page')
   } else {
     feedback.className = 'result error'
@@ -543,6 +566,7 @@ async function init() {
   // ?tab=<id> lets the popup be opened as a page for a given tab (debugging, screenshots).
   const forced = Number(new URLSearchParams(location.search).get('tab'))
   const tab = forced ? await chrome.tabs.get(forced) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
+  sourceTabId = tab?.id
   const data = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id, pageUrl: tab?.url, title: tab?.title })
   let pageUrl = data?.pageUrl || tab?.url || ''
   let mediaSourceUrl = data?.mediaSourceUrl || pageUrl
@@ -584,6 +608,7 @@ async function init() {
     if (url) void send(url, undefined, quickStatus, $('quick').querySelector('button'))
   })
 
+  renderVideoCards(data?.videos || [], data?.currentVideo)
   renderItems(data?.items || [], data?.hiddenCount || 0)
   void initDownloadPreferences(settings, () => {
     infoGeneration++; infoQueue.length = 0
@@ -598,6 +623,7 @@ async function init() {
   const refresh = async () => {
     const latest = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id })
     if (!latest) return
+    const previousSource = mediaSourceUrl
     mediaSourceUrl = latest.mediaSourceUrl || latest.pageUrl || pageUrl
     if (latest.pageUrl && latest.pageUrl !== pageUrl) {
       extractGeneration++
@@ -607,8 +633,6 @@ async function init() {
       $('page-title').title = pageUrl
       $('ytdlp').hidden = true
       $('ytdlp').replaceChildren()
-      $('single-video').hidden = true
-      $('single-video').replaceChildren()
       $('playlist-count').textContent = ''
       $('playlist-empty').hidden = false
       $('playlist-empty-text').textContent = 'Откройте страницу с плейлистом. Здесь появятся его ролики и превью.'
@@ -619,12 +643,15 @@ async function init() {
       extractButton.disabled = !isHttp(pageUrl) || !normalizeRouterUrl(settings.routerUrl)
       sendPage.disabled = !isHttp(pageUrl)
     }
+    if (latest.title) $('page-title').textContent = latest.title
+    renderVideoCards(latest.videos || [], latest.currentVideo)
     renderItems(latest.items || [], latest.hiddenCount || 0)
+    if (latest.mediaSourceUrl && mediaSourceUrl !== previousSource && canExtract()) { extracted = true; void runExtract(tab?.id, mediaSourceUrl) }
   }
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'accountChanged') {
       latestJobs = []; paintProgress(); infoCache.clear(); mediaOverrides.clear(); infoGeneration++; infoQueue.length = 0
-      $('ytdlp').replaceChildren(); $('single-video').replaceChildren(); extracted = false
+      $('ytdlp').replaceChildren(); renderVideoCards(); extracted = false
       void checkRouter(); void pollProgress(); return
     }
     if (message?.type === 'jobsChanged') { void pollProgress(); return }

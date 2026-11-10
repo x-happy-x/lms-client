@@ -59,7 +59,15 @@ export function decorateSelect(select) {
   button.type = 'button'; button.className = 'select-label'; button.setAttribute('aria-haspopup', 'listbox'); button.setAttribute('aria-expanded', 'false')
   menu.className = 'select-menu'; menu.role = 'listbox'; menu.hidden = true
   select.before(wrap); wrap.append(select, button, menu); select.classList.add('native-select')
-  const close = () => { menu.hidden = true; button.setAttribute('aria-expanded', 'false'); menu.style.position = '' }
+  let frame = 0
+  const close = () => { cancelAnimationFrame(frame); menu.hidden = true; button.setAttribute('aria-expanded', 'false'); menu.style.position = '' }
+  const place = () => {
+    if (!button.isConnected || button.getBoundingClientRect().width === 0) { close(); return }
+    const rect = button.getBoundingClientRect(), width = Math.min(Math.max(rect.width, 200), innerWidth - 20)
+    const below = innerHeight - rect.bottom - 12, above = rect.top - 12, up = below < 160 && above > below
+    Object.assign(menu.style, { position: 'fixed', width: `${width}px`, left: `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`, maxHeight: `${Math.max(80, Math.min(260, up ? above : below))}px`, top: up ? 'auto' : `${rect.bottom + 6}px`, bottom: up ? `${innerHeight - rect.top + 6}px` : 'auto' })
+  }
+  const tether = () => { if (menu.hidden) return; place(); if (!menu.hidden) frame = requestAnimationFrame(tether) }
   const sync = () => {
     button.replaceChildren(document.createTextNode(select.selectedOptions[0]?.textContent || 'Выбрать'), icon('chevron'))
     button.disabled = select.disabled
@@ -73,17 +81,14 @@ export function decorateSelect(select) {
       const item = document.createElement('button'); item.type = 'button'; item.role = 'option'; item.textContent = option.textContent
       item.disabled = option.disabled; item.setAttribute('aria-selected', String(option.selected))
       if (option.selected) item.append(icon('check'))
-      item.addEventListener('click', () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus() })
+      item.addEventListener('click', () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus({ preventScroll: true }) })
       return item
     }))
     menu.hidden = false; button.setAttribute('aria-expanded', 'true')
-    const rect = button.getBoundingClientRect(), width = Math.min(Math.max(rect.width, 200), innerWidth - 20)
-    const below = innerHeight - rect.bottom - 12, above = rect.top - 12, up = below < 160 && above > below
-    Object.assign(menu.style, { position: 'fixed', width: `${width}px`, left: `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`, maxHeight: `${Math.max(80, Math.min(260, up ? above : below))}px`, top: up ? 'auto' : `${rect.bottom + 6}px`, bottom: up ? `${innerHeight - rect.top + 6}px` : 'auto' })
-    menu.querySelector('[aria-selected="true"]')?.focus()
+    place(); menu.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true }); tether()
   })
   wrap.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { close(); button.focus(); event.preventDefault() }
+    if (event.key === 'Escape') { close(); button.focus({ preventScroll: true }); event.preventDefault() }
     if (menu.hidden && ['ArrowDown', 'ArrowUp', ' '].includes(event.key)) { event.preventDefault(); button.click(); return }
     if (!menu.hidden && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); const items = [...menu.querySelectorAll('button:not(:disabled)')], at = items.indexOf(document.activeElement)

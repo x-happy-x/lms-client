@@ -4,7 +4,8 @@ export function canonicalVideoPage(raw) {
     const url = new URL(raw)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return ''
     if (!['vk.com', 'www.vk.com', 'm.vk.com', 'vkvideo.ru', 'www.vkvideo.ru', 'm.vkvideo.ru'].includes(url.hostname)) return ''
-    const match = /^\/video(-?\d+_\d+)$/.exec(url.pathname)
+    const routed = ['z', 'w'].map(key => url.searchParams.get(key) || '').find(value => /^video-?\d+_\d+/.test(value))
+    const match = /^\/video(-?\d+_\d+)$/.exec(url.pathname) || /^video(-?\d+_\d+)/.exec(routed || '')
     if (match) return `https://vkvideo.ru/video${match[1]}`
     const oid = url.searchParams.get('oid'), id = url.searchParams.get('id')
     if (url.pathname === '/video_ext.php' && /^-?\d+$/.test(oid || '') && /^\d+$/.test(id || '')) return `https://vkvideo.ru/video${oid}_${id}`
@@ -12,7 +13,7 @@ export function canonicalVideoPage(raw) {
   return ''
 }
 export function isVkMedia(raw) {
-  try { const host = new URL(raw).hostname; return host.endsWith('.vkuser.net') || host.endsWith('.vkuser.ru') || host.endsWith('.userapi.com') || (host.startsWith('vk') && host.endsWith('.okcdn.ru')) }
+  try { const host = new URL(raw).hostname; return host.endsWith('.vkuser.net') || host.endsWith('.vkuser.ru') || (host.startsWith('vk') && host.endsWith('.okcdn.ru')) }
   catch { return false }
 }
 export function dedupeVkMedia(items) {
