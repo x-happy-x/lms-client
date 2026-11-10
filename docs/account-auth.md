@@ -64,8 +64,14 @@ Account. Разрешение действует 30 дней только для
 При недоступном Account API возвращает 503, доступ не открывается. Снятие
 роли/блокировка/отзыв прекращает доступ без кеша проверки токена. Изменяющие
 запросы с cookie требуют Origin ровно публичного LMS; расширение использует
-Bearer. Старые LAN-клиенты после включения режима должны передавать такой
-же scoped Bearer; одного HTTP Basic за внешним прокси недостаточно.
+Bearer. Для совместимости LMS Android можно оставить HTTP Basic с логином
+Account: роутер проверяет его через `/api/gateway/basic` на каждом запросе,
+не сохраняет пароль и не выпускает дополнительные пользовательские токены.
+Нужен root-only файл со служебным credential существующего Account gateway
+и `ROUTERD_ACCOUNT_GATEWAY_TOKEN_FILE=/opt/routerd/config/account-gateway.token`.
+Это отдельный credential шлюза, не HMAC ноды и не пароль пользователя.
+Basic принимается только по HTTPS (прямой TLS или доверенный loopback proxy),
+проверяются актуальная роль, forced password change и лимиты попыток Account.
 
 Проверка: Account `npm test`, расширение `npm test`, роутер `go test ./...`,
 веб-интерфейс `npm run build` и `npx tsc --noEmit`. Реальный интерактивный

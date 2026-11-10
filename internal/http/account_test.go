@@ -2,6 +2,7 @@ package http
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -12,6 +13,72 @@ import (
 )
 
 const testAccountToken = "kat_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+func TestAccountBasicPreservesHTTPSMobileClients(t *testing.T) {
+	role, status, calls := "editor", 200, 0
+	account := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/api/gateway/basic" || r.Header.Get("X-Gateway-Token") != "dedicated-test-credential" || r.Header.Get("Authorization") != "" {
+			t.Error("wrong Basic validation channel")
+		}
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["app"] != "lms_node" || body["login"] != "mobile" || body["password"] != "fixture-only-password" {
+			t.Error("invalid credentials body")
+		}
+		if status != 200 {
+			w.WriteHeader(status)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(accountUser{Login: "mobile", Role: role})
+	}))
+	defer account.Close()
+	build := func(key string) http.Handler {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/ui/jobs", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
+		return withAccount(mux, account.URL, "https://lms.example", key)
+	}
+	h := build("dedicated-test-credential")
+	request := func(handler http.Handler, method, peer, proto string, secure bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/api/ui/jobs", nil)
+		r.RemoteAddr = peer
+		r.SetBasicAuth("mobile", "fixture-only-password")
+		r.Header.Set("X-Forwarded-Proto", proto)
+		if secure {
+			r.TLS = &tls.ConnectionState{}
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	for _, tc := range []struct{ peer, proto string }{{"127.0.0.1:1000", "http"}, {"192.0.2.1:1000", "https"}} {
+		if w := request(h, "GET", tc.peer, tc.proto, false); w.Code != 401 {
+			t.Fatalf("insecure Basic: %d", w.Code)
+		}
+	}
+	if calls != 0 {
+		t.Fatal("insecure Basic reached Account")
+	}
+	if w := request(build(""), "GET", "127.0.0.1:1000", "https", false); w.Code != 401 || calls != 0 {
+		t.Fatal("Basic enabled without service credential")
+	}
+	if w := request(h, "POST", "127.0.0.1:1000", "https", false); w.Code != 204 {
+		t.Fatalf("mobile write %d", w.Code)
+	}
+	role = "viewer"
+	if w := request(h, "POST", "127.0.0.1:1000", "https", false); w.Code != 403 {
+		t.Fatalf("viewer write %d", w.Code)
+	}
+	if w := request(h, "GET", "192.0.2.1:1000", "", true); w.Code != 204 {
+		t.Fatalf("real TLS read %d", w.Code)
+	}
+	for _, expected := range []int{401, 403, 429, 503} {
+		status = expected
+		if w := request(h, "GET", "127.0.0.1:1000", "https", false); w.Code != expected {
+			t.Fatalf("status %d became %d", expected, w.Code)
+		}
+	}
+}
 
 func authRequest(h http.Handler, method, path, token, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, nil)
