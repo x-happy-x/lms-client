@@ -263,8 +263,5 @@ code { font-size: 12px; }
 .preview:has(.download-water) > .duration { visibility: hidden; }
 .media-meta .select-label { min-height: 23px; padding: 3px 7px; font-size: 10px; color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
 .media-meta .select-label > .ui-icon { width: 11px; height: 11px; color: currentColor; }
-.technical-streams { border: 1px solid var(--border); border-radius: 12px; margin: 10px 0; }
-.technical-streams > summary { padding: 12px; }
-.technical-streams > .hint { padding: 0 12px; }
-.technical-streams > .items { margin: 0; padding: 0 8px 8px; }
 .download-water[data-state=ERROR] .water-wave path, .download-water[data-state=CANCELED] .water-wave path { animation-play-state: paused; }
+.music-section { margin-top: 16px; }

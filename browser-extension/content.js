@@ -61,9 +61,11 @@
     for (const root of roots) {
       for (const media of root.querySelectorAll('video, audio')) {
         const source = media.tagName === 'VIDEO' ? 'video' : 'audio'
-        const name = media.getAttribute('title') || media.getAttribute('aria-label') || ''
+        const track = source === 'audio' ? navigator.mediaSession?.metadata : null
+        const trackName = track?.title ? [track.artist, track.title].filter(Boolean).join(' — ') : ''
+        const name = media.getAttribute('title') || media.getAttribute('aria-label') || trackName
         const metadata = {
-          thumbnail: media.poster || '', durationSeconds: media.duration,
+          thumbnail: media.poster || track?.artwork?.find(art => /^https?:/i.test(art.src))?.src || '', durationSeconds: media.duration,
           width: media.videoWidth, height: media.videoHeight
         }
         push(media.currentSrc || media.getAttribute('src') || media.getAttribute('data-src'), source, name, metadata)
