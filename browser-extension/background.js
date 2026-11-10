@@ -3,13 +3,15 @@
 import { shouldIntercept, downloadKind, sniffCandidate } from './lib/intercept.js'
 import { displayName, isHttp, isMagnet, isVideoHost, kindOf, normalizeCandidates, normalizeRouterUrl } from './lib/links.js'
 import { DEFAULT_SETTINGS, extractMedia, health, listNodes, storageTargets, sendToRouter } from './lib/router.js'
+import { routerSettings, loginAccount, logoutAccount, statusAccount } from './lib/account.js'
 
 const TYPE_LABEL = { DIRECT: 'HTTP', YTDLP: 'yt-dlp', ARIA2C: 'aria2c', TORRENT: 'торрент' }
 const SNIFF_LIMIT = 60
 
 // Settings are read synchronously in onCreated, so keep a cached copy.
 let settings = { ...DEFAULT_SETTINGS }
-const ready = chrome.storage.sync.get(DEFAULT_SETTINGS).then((value) => {
+const ready = chrome.storage.sync.get(DEFAULT_SETTINGS).then(async (value) => {
+  await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
   settings = { ...DEFAULT_SETTINGS, ...value }
 })
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -100,7 +102,7 @@ async function sendUrl(url, { type, maxSpeedBytes, nodeId, storagePath, ytdlpOpt
     type = 'YTDLP'
   }
   try {
-    const { job, plan } = await sendToRouter(settings, url, { type, maxSpeedBytes, nodeId, storagePath, ytdlpOptions })
+    const { job, plan } = await sendToRouter(await routerSettings(settings), url, { type, maxSpeedBytes, nodeId, storagePath, ytdlpOptions })
     if (!quiet) {
       notify(
         'Отправлено в LMS',
@@ -195,6 +197,13 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 // ---- messages from content scripts and the popup ----
 
 async function onMessage(message, sender) {
+  if (['accountLogin', 'accountLogout', 'accountStatus'].includes(message?.type)) {
+    if (!sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('Вход доступен только из окна расширения')
+    await ready
+    if (message.type === 'accountLogin') return loginAccount(settings)
+    if (message.type === 'accountLogout') return logoutAccount(settings)
+    return statusAccount(settings)
+  }
   switch (message?.type) {
     case 'scan': {
       const tabId = sender.tab?.id
@@ -216,10 +225,10 @@ async function onMessage(message, sender) {
       return sendUrl(message.url, { type: message.linkType, maxSpeedBytes: message.maxSpeedBytes, nodeId: message.nodeId, storagePath: message.storagePath, ytdlpOptions: message.ytdlpOptions, quiet: message.quiet })
     case 'destinations':
       await ready
-      return { ok: true, nodes: await listNodes(settings) }
+      return { ok: true, nodes: await listNodes(await routerSettings(settings)) }
     case 'storageTargets':
       await ready
-      return { ok: true, result: await storageTargets(settings, message.nodeId) }
+      return { ok: true, result: await storageTargets(await routerSettings(settings), message.nodeId) }
     case 'getTab': {
       const state = await tabState(message.tabId)
       const pageUrl = state.pageUrl || message.pageUrl || ''
@@ -231,12 +240,13 @@ async function onMessage(message, sender) {
     case 'extract': {
       // Cached per tab and page so reopening the popup does not rerun yt-dlp.
       await ready
+      const auth = await routerSettings(settings)
       const key = `extract:${message.tabId}`
       const cached = (await chrome.storage.session.get(key))[key]
-      if (!message.force && cached?.url === message.url && cached.nodeId === settings.downloadNodeId) return { ok: true, result: cached.result }
+      if (!message.force && cached?.url === message.url && cached.nodeId === settings.downloadNodeId && cached.routerUrl === settings.routerUrl && cached.accountSession === auth.accountSession) return { ok: true, result: cached.result }
       try {
-        const result = await extractMedia(settings, message.url)
-        chrome.storage.session.set({ [key]: { url: message.url, nodeId: settings.downloadNodeId, result } }).catch(() => {})
+        const result = await extractMedia(auth, message.url)
+        chrome.storage.session.set({ [key]: { url: message.url, nodeId: settings.downloadNodeId, routerUrl: settings.routerUrl, accountSession: auth.accountSession, result } }).catch(() => {})
         return { ok: true, result }
       } catch (error) {
         return { ok: false, error: error.message }
@@ -245,7 +255,7 @@ async function onMessage(message, sender) {
     case 'health':
       await ready
       try {
-        await health(message.settings ? { ...settings, ...message.settings } : settings)
+        await health(await routerSettings(message.settings ? { ...settings, ...message.settings } : settings))
         return { ok: true }
       } catch (error) {
         return { ok: false, error: error.message }

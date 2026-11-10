@@ -16,15 +16,21 @@
           <input id="routerUrl" type="text" placeholder="192.168.1.1:8082" autocomplete="off" />
         </label>
         <p class="hint muted">Проще всего подключить со страницы «Расширение» в веб-интерфейсе LMS — кнопкой «Подключить к этому роутеру».</p>
-        <p class="hint muted">У <code>/api/ui</code> нет авторизации. Если LMS доступен через прокси с паролем — укажите логин и пароль (HTTP Basic).</p>
-        <div class="grid2">
-          <label class="field"><span>Логин</span><input id="username" type="text" autocomplete="off" /></label>
-          <label class="field"><span>Пароль</span><input id="password" type="password" autocomplete="off" /></label>
-        </div>
+        <details class="disclosure legacy-auth"><summary><span class="grow">HTTP Basic для старого прокси</span><span class="disclosure-chevron" data-icon="chevron"></span></summary><div class="preferences-body grid2">
+          <label class="field"><span>Логин прокси</span><input id="username" type="text" autocomplete="off" /></label>
+          <label class="field"><span>Пароль прокси</span><input id="password" type="password" autocomplete="off" /></label>
+        </div></details>
         <div class="row">
           <button id="test" class="btn">Проверить связь</button>
           <span id="test-result" class="result"></span>
         </div>
+      </section>
+
+      <section class="card">
+        <h2>Аккаунт</h2>
+        <label class="field"><span>Адрес Account</span><input id="accountUrl" type="url" placeholder="https://account.crubs.crazedns.ru" autocomplete="off" /></label>
+        <div id="account-panel" class="account-panel"><span class="account-avatar" data-icon="user"></span><div class="grow"><strong id="account-title">Вход через Account</strong><p id="account-detail" class="hint muted" role="status">Проверяем подключение…</p></div><button id="account-action" class="btn primary" type="button" disabled>Войти</button></div>
+        <p class="hint muted">Вход откроется на сайте Account. Расширение получает доступ только к LMS на 30 дней; отозвать его можно в профиле Account.</p>
       </section>
 
       <section class="card">

@@ -1,9 +1,10 @@
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences } from './lib/preferences.js'
-import { decorateToggles } from './lib/ui.js'
+import { decorateToggles, hydrateIcons } from './lib/ui.js'
+import { initAccountUI } from './lib/account-ui.js'
 
 const $ = (id) => document.getElementById(id)
-const TEXT = ['routerUrl', 'username', 'password']
+const TEXT = ['routerUrl', 'accountUrl', 'username', 'password']
 const CHECKS = ['interceptDownloads', 'interceptMagnets', 'sniffMedia', 'notifications']
 
 function save(patch) {
@@ -15,11 +16,13 @@ function save(patch) {
 
 async function init() {
   decorateToggles()
+  hydrateIcons()
   const settings = { ...DEFAULT_SETTINGS, ...(await chrome.storage.sync.get(DEFAULT_SETTINGS)) }
+  const refreshAccount = initAccountUI()
 
   for (const key of TEXT) {
     $(key).value = settings[key] || ''
-    $(key).addEventListener('change', () => { settings[key] = $(key).value.trim(); save({ [key]: settings[key] }) })
+    $(key).addEventListener('change', async () => { settings[key] = $(key).value.trim(); await chrome.storage.sync.set({ [key]: settings[key] }); void refreshAccount() })
   }
   for (const key of CHECKS) {
     $(key).checked = Boolean(settings[key])

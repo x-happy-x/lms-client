@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LMS — загрузки через роутер",
   "short_name": "LMS",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Находит на странице видео, файлы и magnet-ссылки, перехватывает загрузки и отправляет их в LMS на роутере.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -27,20 +27,38 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "contextMenus", "downloads", "notifications", "webRequest", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "downloads",
+    "notifications",
+    "webRequest",
+    "tabs",
+    "identity"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     }
   ],
   "commands": {
     "send-page": {
-      "suggested_key": { "default": "Alt+Shift+L" },
+      "suggested_key": {
+        "default": "Alt+Shift+L"
+      },
       "description": "Отправить страницу в LMS (yt-dlp)"
     }
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0kG3OEcR6rikTKLDnj3zarGzxJGHJIjiLWE8EEp3nkdzIdIFMy/uMEdzjRROd24TWklPo9UX6zxBrgzGdFJBPEsfUPEZK9n6QIZubZ9QmoEeMAcgJHgp/lm5uTqRmkfQsoU/JGW+Tu64X/vKwG3YgptQTuANlHv4gm1Nh6oOrREBA6yZi4iW4+4VC4KAz2cJyXlFG71pDTYB7G0Ct+OFVjOhYe++hwNVRtaYZXaqBQKh1ImVP52ha0lGXjtTmopDpmXq/a7u3kMrUkrxMPLAkSbnUEYlyPgL75gfFFcueCiPsk11V3NVCCZi+r93vyV+GZWZQbOylVoHnwXAFqFzowIDAQAB"
 }
