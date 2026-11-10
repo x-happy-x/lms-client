@@ -32,6 +32,8 @@ type JobController interface {
 }
 
 type Dependencies struct {
+	AccountOrigin string
+	PublicOrigin  string
 	DB            *sql.DB
 	Version       string
 	JobRepo       domain.JobRepository
@@ -242,7 +244,7 @@ func NewHandler(deps Dependencies) http.Handler {
 	if deps.StaticDir != "" {
 		mux.HandleFunc("/", spaHandler(deps.StaticDir))
 	}
-	return mux
+	return withAccount(mux, deps.AccountOrigin, deps.PublicOrigin)
 }
 
 func spaHandler(staticDir string) http.HandlerFunc {

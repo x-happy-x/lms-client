@@ -8,6 +8,7 @@ import type {
 } from './types'
 
 const BASE = '/api/ui'
+let redirectingToAccount = false
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
@@ -21,8 +22,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`
     try {
-      const payload = (await response.json()) as { error?: string }
+      const payload = (await response.json()) as { error?: string; authRequired?: boolean }
       if (payload?.error) message = payload.error
+      if (response.status === 401 && payload?.authRequired && !redirectingToAccount) {
+        redirectingToAccount = true
+        window.location.assign(`/auth/login?return=${encodeURIComponent(location.pathname + location.search + location.hash)}`)
+      }
     } catch {
       // no-op
     }

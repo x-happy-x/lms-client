@@ -4,6 +4,7 @@ import { videoOptions as savedVideoOptions } from './preferences.js'
 
 export const DEFAULT_SETTINGS = {
   routerUrl: '',
+  accountUrl: 'https://account.crubs.crazedns.ru',
   username: '',
   password: '',
   interceptDownloads: true,
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS = {
 }
 
 export function authHeaders(settings) {
+  if (settings.accountToken) return { Authorization: `Bearer ${settings.accountToken}` }
   if (!settings.username && !settings.password) return {}
   return { Authorization: `Basic ${btoa(unescape(encodeURIComponent(`${settings.username}:${settings.password}`)))}` }
 }
@@ -30,6 +32,8 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
   if (!base) throw new Error('Не указан адрес LMS — откройте настройки расширения')
   const response = await fetchImpl(`${base}/api/ui${path}`, {
     ...init,
+    redirect: 'error',
+    credentials: 'omit',
     headers: { 'Content-Type': 'application/json', ...authHeaders(settings), ...(init.headers || {}) }
   })
   const text = await response.text()
@@ -39,7 +43,13 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
   } catch {
     body = null
   }
-  if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`)
+  if (!response.ok) {
+    if (response.status === 401) await settings.onUnauthorized?.()
+    const error = new Error(body?.error || `HTTP ${response.status}`)
+    error.status = response.status
+    throw error
+  }
+  if (!body) throw new Error('LMS вернул страницу вместо API. Войдите через Account и проверьте адрес роутера.')
   return body
 }
 

@@ -30,6 +30,15 @@ body { margin: 0; background: var(--bg); color: var(--text); }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 .grow { flex: 1; }
+.account-panel { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.account-panel[hidden] { display: none; }
+.popup .account-panel { margin: 10px 12px 4px; }
+.account-panel .grow { min-width: 0; }
+.account-panel strong { display: block; overflow-wrap: anywhere; }
+.account-panel .hint { margin: 3px 0 0; font-size: 11px; }
+.account-avatar { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.account-panel .btn { display: inline-flex; gap: 6px; align-items: center; }
+.legacy-auth { margin-block: 12px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.tight { gap: 4px; }
 button, input, select { font: inherit; color: inherit; }

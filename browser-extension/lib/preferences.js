@@ -50,7 +50,9 @@ export async function initDownloadPreferences(settings, onChange = () => {}) {
       if (!target.writable) continue
       const option = document.createElement('option')
       option.value = target.path
-      option.label = `Свободно ${(target.freeBytes / 1024 ** 3).toFixed(1)} ГБ`
+      const bytes = Number(target.freeBytes)
+      const space = Number.isFinite(bytes) ? `${(bytes / (bytes >= 1e12 ? 1e12 : 1e9)).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${bytes >= 1e12 ? 'ТБ' : 'ГБ'}` : 'неизвестно'
+      option.label = `Свободно ${space}${target.path === result.defaultPath ? ' · по умолчанию' : ''}`
       $('download-paths').append(option)
     }
     status.textContent = result?.defaultPath ? `По умолчанию: ${result.defaultPath}. Можно указать подпапку.` : 'Можно указать папку или подпапку на ноде.'

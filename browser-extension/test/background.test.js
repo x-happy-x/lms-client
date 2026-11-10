@@ -10,9 +10,9 @@ const storage = {
 }
 const messages = []
 globalThis.chrome = {
-  storage: { sync: storage, session: storage, onChanged: event() },
+  storage: { sync: storage, session: storage, local: { ...storage, setAccessLevel: async () => {} }, onChanged: event() },
   action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {} },
-  runtime: { onMessage: event(), onInstalled: event(), sendMessage: async (message) => messages.push(message) },
+  runtime: { onMessage: event(), onInstalled: event(), sendMessage: async (message) => messages.push(message), getURL: path => `chrome-extension://test/${path}` },
   tabs: { onUpdated: event(), onRemoved: event(), sendMessage: async () => {} },
   webRequest: { onHeadersReceived: event() },
   downloads: { onCreated: event() },
@@ -52,4 +52,12 @@ test('reload and query-only SPA navigation discard findings from the previous pa
   await scan(20, 'https://example.com/watch?v=2', [{ url: '/b.mp4', source: 'video' }])
   chrome.tabs.onUpdated.listeners[0](20, { status: 'loading' }, { url: 'https://example.com/watch?v=2' })
   assert.deepEqual((await findings(20)).items, [])
+})
+
+test('a website content script cannot start login, logout or inspect the Account session', async () => {
+  for (const type of ['accountLogin', 'accountLogout', 'accountStatus']) {
+    const result = await message({ type }, { url: 'https://example.com', tab: { id: 1 } })
+    assert.equal(result.ok, false)
+    assert.match(result.error, /только из окна расширения/)
+  }
 })

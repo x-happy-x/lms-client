@@ -2,6 +2,7 @@ import { icon, decorateToggles, hydrateIcons } from './lib/ui.js'
 import { extensionOf, hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType } from './lib/links.js'
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences, videoOptions } from './lib/preferences.js'
+import { initAccountUI } from './lib/account-ui.js'
 
 const KIND_LABEL = {
   video: 'Видео',
@@ -393,6 +394,7 @@ async function init() {
     })
   }
   settings = { ...DEFAULT_SETTINGS, ...(await chrome.storage.sync.get(DEFAULT_SETTINGS)) }
+  initAccountUI({ compact: true })
   $('speed').value = String(settings.maxSpeedBytes || 0)
   if (!$('speed').value) $('speed').value = '0'
 
