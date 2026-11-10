@@ -336,7 +336,7 @@ function renderVideoCards(videos = [], currentVideo = null) {
   const urls = new Set(entries.map(video => video.url)), container = $('single-video')
   for (const [url, entry] of videoRows) if (!urls.has(url)) { entry.row.remove(); videoRows.delete(url) }
   for (const [index, video] of entries.entries()) {
-    const previous = videoRows.get(video.url), item = { ...video, name: video.title || video.url, kind: 'video', page: true }
+    const previous = videoRows.get(video.url), item = { ...video, name: video.title || video.url, kind: 'video', page: video.page !== false }
     let row
     if (previous) {
       row = previous.row
@@ -646,7 +646,7 @@ async function init() {
     if (latest.title) $('page-title').textContent = latest.title
     renderVideoCards(latest.videos || [], latest.currentVideo)
     renderItems(latest.items || [], latest.hiddenCount || 0)
-    if (latest.mediaSourceUrl && mediaSourceUrl !== previousSource && canExtract()) { extracted = true; void runExtract(tab?.id, mediaSourceUrl) }
+    if (latest.mediaSourceUrl && (mediaSourceUrl !== previousSource || (!extracted && latest.videoHost)) && canExtract()) { extracted = true; void runExtract(tab?.id, mediaSourceUrl) }
   }
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'accountChanged') {
