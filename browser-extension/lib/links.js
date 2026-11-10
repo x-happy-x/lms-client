@@ -58,7 +58,7 @@ export function isVideoHost(url) {
 export function kindFromContentType(contentType) {
   const type = (contentType || '').split(';')[0].trim().toLowerCase()
   if (!type) return ''
-  if (type === 'application/vnd.apple.mpegurl' || type === 'application/x-mpegurl' || type === 'application/dash+xml') return 'stream'
+  if (['application/vnd.apple.mpegurl', 'application/x-mpegurl', 'audio/mpegurl', 'audio/x-mpegurl', 'application/dash+xml'].includes(type)) return 'stream'
   if (type.startsWith('video/')) return 'video'
   if (type.startsWith('audio/')) return 'audio'
   if (type === 'application/x-bittorrent') return 'torrent'
@@ -111,7 +111,7 @@ export function displayName(url) {
  * even without an extension), and orders them videos first.
  */
 export function normalizeCandidates(candidates, baseUrl) {
-  const seen = new Set()
+  const seen = new Map()
   const out = []
   for (const candidate of candidates) {
     let url = candidate.url
@@ -125,11 +125,25 @@ export function normalizeCandidates(candidates, baseUrl) {
       }
       if (!isHttp(url)) continue
     }
-    const kind = kindOf(url) || (candidate.source === 'video' ? 'video' : candidate.source === 'audio' ? 'audio' : '')
+    const kind = (DOWNLOADABLE.has(candidate.kind) ? candidate.kind : '') || kindOf(url) ||
+      (['video', 'audio', 'stream'].includes(candidate.source) ? candidate.source : '')
     const keep = kind === 'magnet' || DOWNLOADABLE.has(kind) || candidate.source === 'download-attr'
-    if (!keep || seen.has(url)) continue
-    seen.add(url)
-    out.push({ url, kind: kind || 'file', name: candidate.name || displayName(url), source: candidate.source })
+    if (!keep) continue
+    const item = seen.get(url) || { url, kind: kind || 'file', name: displayName(url), source: candidate.source }
+    if (kind === 'stream') item.kind = kind
+    if (candidate.name) item.name = String(candidate.name).slice(0, 200)
+    for (const key of ['durationSeconds', 'width', 'height', 'sizeBytes']) {
+      if (Number.isFinite(candidate[key]) && candidate[key] > 0) item[key] = candidate[key]
+    }
+    if (candidate.contentType) item.contentType = String(candidate.contentType).split(';')[0]
+    if (candidate.thumbnail) {
+      try {
+        const thumbnail = new URL(candidate.thumbnail, baseUrl).href
+        if (isHttp(thumbnail)) item.thumbnail = thumbnail
+      } catch { /* invalid poster */ }
+    }
+    if (!seen.has(url)) out.push(item)
+    seen.set(url, item)
   }
   const order = ['video', 'stream', 'audio', 'magnet', 'torrent']
   const rank = (item) => {

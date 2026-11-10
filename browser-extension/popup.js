@@ -1,4 +1,4 @@
-import { hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType } from './lib/links.js'
+import { extensionOf, hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType } from './lib/links.js'
 import { DEFAULT_SETTINGS } from './lib/router.js'
 
 const KIND_LABEL = {
@@ -22,6 +22,27 @@ const TYPES = [
 
 const $ = (id) => document.getElementById(id)
 let settings = { ...DEFAULT_SETTINGS }
+const itemRows = new Map()
+
+function preview(item) {
+  const box = el('div', { className: 'preview' })
+  if (item.thumbnail) {
+    const img = el('img', { src: item.thumbnail, alt: '', referrerPolicy: 'no-referrer' })
+    img.addEventListener('error', () => img.remove())
+    box.append(img)
+  }
+  const label = el('span', { className: 'preview-kind', textContent: KIND_LABEL[item.kind] || item.kind })
+  box.append(label)
+  if (item.durationSeconds) box.append(el('span', { className: 'duration', textContent: formatDuration(item.durationSeconds) }))
+  return box
+}
+
+function mediaDetails(item) {
+  const format = item.kind === 'stream' ? (item.contentType === 'application/dash+xml' || extensionOf(item.url) === 'mpd' ? 'DASH' : 'HLS') :
+    extensionOf(item.url).toUpperCase() || item.contentType?.split('/')[1]?.toUpperCase()
+  return [format, item.height ? `${item.height}p` : '', formatSize(item.sizeBytes),
+    isMagnet(item.url) ? 'magnet' : hostOf(item.url)].filter(Boolean).join(' · ')
+}
 
 function el(tag, props = {}, children = []) {
   const node = Object.assign(document.createElement(tag), props)
@@ -47,32 +68,52 @@ async function send(url, linkType, statusNode, button) {
 
 function renderItems(items) {
   const list = $('items')
-  list.replaceChildren()
+  const urls = new Set(items.map((item) => item.url))
+  for (const [url, entry] of itemRows) {
+    if (!urls.has(url)) { entry.row.remove(); itemRows.delete(url) }
+  }
   $('count').textContent = items.length ? String(items.length) : ''
   $('empty').hidden = items.length > 0
   for (const item of items) {
+    const previous = itemRows.get(item.url)
+    const signature = JSON.stringify(item)
+    if (previous?.signature === signature) continue
+    if (previous) {
+      previous.row.querySelector('.preview').replaceWith(preview(item))
+      previous.row.querySelector('.name').textContent = item.name
+      const details = previous.row.querySelector('.host')
+      details.textContent = details.title = mediaDetails(item)
+      if (previous.kind !== item.kind && !previous.chosen) {
+        previous.select.value = item.kind === 'stream' ? 'YTDLP' : suggestType(item.url)
+      }
+      previous.kind = item.kind
+      previous.signature = signature
+      continue
+    }
     const typeSelect = el(
       'select',
       { className: 'type', title: 'Способ загрузки' },
       TYPES.map(([value, label]) => el('option', { value, textContent: label }))
     )
-    typeSelect.value = suggestType(item.url)
+    typeSelect.value = item.kind === 'stream' ? 'YTDLP' : suggestType(item.url)
     const status = el('div', { className: 'result' })
     const button = el('button', { className: 'btn primary small', textContent: 'В LMS' })
     button.addEventListener('click', () => send(item.url, typeSelect.value, status, button))
     const copy = el('button', { className: 'icon small', textContent: '⧉', title: 'Копировать ссылку' })
     copy.addEventListener('click', () => navigator.clipboard.writeText(item.url))
-    list.append(
-      el('li', { className: 'item' }, [
-        el('span', { className: `kind kind-${item.kind}`, textContent: KIND_LABEL[item.kind] || item.kind }),
+    const row = el('li', { className: 'item' }, [
+        preview(item),
         el('div', { className: 'info' }, [
           el('div', { className: 'name', textContent: item.name, title: item.url }),
-          el('div', { className: 'host muted', textContent: isMagnet(item.url) ? 'magnet' : hostOf(item.url) }),
+          el('div', { className: 'host muted', textContent: mediaDetails(item), title: mediaDetails(item) }),
           status
         ]),
         el('div', { className: 'actions' }, [typeSelect, el('div', { className: 'row tight' }, [copy, button])])
       ])
-    )
+    list.append(row)
+    const entry = { row, signature, kind: item.kind, select: typeSelect, chosen: false }
+    typeSelect.addEventListener('change', () => { entry.chosen = true })
+    itemRows.set(item.url, entry)
   }
 }
 
@@ -248,7 +289,7 @@ async function init() {
   const forced = Number(new URLSearchParams(location.search).get('tab'))
   const tab = forced ? await chrome.tabs.get(forced) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
   const data = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id, pageUrl: tab?.url, title: tab?.title })
-  const pageUrl = data?.pageUrl || tab?.url || ''
+  let pageUrl = data?.pageUrl || tab?.url || ''
   $('page-title').textContent = data?.title || tab?.title || pageUrl
   $('page-title').title = pageUrl
   const pageStatus = el('div', { className: 'result' })
@@ -281,6 +322,34 @@ async function init() {
   })
 
   renderItems(data?.items || [])
+  let refreshTimer = 0
+  const refresh = async () => {
+    const latest = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id })
+    if (!latest) return
+    if (latest.pageUrl && latest.pageUrl !== pageUrl) {
+      pageUrl = latest.pageUrl
+      $('page-title').textContent = latest.title || pageUrl
+      $('page-title').title = pageUrl
+      $('ytdlp').hidden = true
+      extracted = false
+      extractButton.disabled = !isHttp(pageUrl) || !normalizeRouterUrl(settings.routerUrl)
+      sendPage.disabled = !isHttp(pageUrl)
+    }
+    renderItems(latest.items || [])
+  }
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== 'tabChanged' || message.tabId !== tab?.id || refreshTimer) return
+    refreshTimer = setTimeout(() => { refreshTimer = 0; void refresh() }, 150)
+  })
+  $('rescan').addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'rescan', tabId: tab?.id })
+    await refresh()
+  })
+  // Rescan all frames, including players whose metadata arrived while the popup opened.
+  if (tab?.id && isHttp(pageUrl)) {
+    await chrome.runtime.sendMessage({ type: 'rescan', tabId: tab.id })
+    await refresh()
+  }
   void checkRouter()
 }
 
