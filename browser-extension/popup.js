@@ -1,3 +1,4 @@
+import { icon, decorateToggles, hydrateIcons } from './lib/ui.js'
 import { extensionOf, hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType } from './lib/links.js'
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences, videoOptions } from './lib/preferences.js'
@@ -12,7 +13,8 @@ const KIND_LABEL = {
   document: 'Документ',
   disk: 'Образ',
   app: 'Программа',
-  file: 'Файл'
+  file: 'Файл',
+  playlist: 'Плейлист'
 }
 const TYPES = [
   ['DIRECT', 'HTTP'],
@@ -24,39 +26,32 @@ const TYPES = [
 const $ = (id) => document.getElementById(id)
 let settings = { ...DEFAULT_SETTINGS }
 const itemRows = new Map()
+let onPlaylistActivate = () => {}
+let extractGeneration = 0
 
-const ICON_PATHS = {
-  video: 'm9 7 8 5-8 5Z M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z',
-  audio: 'M9 18V5l12-2v13 M9 8l12-2 M9 18a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z M21 16a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z',
-  file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h5',
-  magnet: 'M6 3v9a6 6 0 0 0 12 0V3h-4v9a2 2 0 0 1-4 0V3Z M6 7h4 M14 7h4',
-  copy: 'M9 9h11v11H9Z M15 5V3H3v12h2',
-  download: 'M12 3v12 m-5-5 5 5 5-5 M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
-  check: 'm5 12 4 4L19 6',
-  refresh: 'M20 7v5h-5 M4 17v-5h5 M6.1 6.1A8 8 0 0 1 20 12 M4 12a8 8 0 0 0 13.9 5.9',
-  external: 'M14 3h7v7 M21 3l-9 9 M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5',
-  settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z',
-  loader: 'M21 12a9 9 0 1 1-9-9'
+function updatePageCount() {
+  const count = itemRows.size + ($('single-video').hidden ? 0 : $('single-video').childElementCount)
+  $('count').textContent = count ? String(count) : ''
+  $('empty').hidden = count > 0
 }
 
-function icon(name) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(key, value)
-  svg.classList.add('ui-icon')
-  if (name === 'loader') svg.classList.add('spin')
-  const path = document.createElementNS(svg.namespaceURI, 'path')
-  path.setAttribute('d', ICON_PATHS[name] || ICON_PATHS.file)
-  svg.append(path)
-  return svg
+function selectTab(name) {
+  for (const key of ['page', 'playlist']) {
+    const active = name === key
+    $(`tab-${key}`).setAttribute('aria-selected', String(active))
+    $(`tab-${key}`).tabIndex = active ? 0 : -1
+    $(`panel-${key}`).hidden = !active
+  }
+  if (name === 'playlist') onPlaylistActivate()
 }
 
-function downloadButton() {
-  return el('button', { className: 'btn primary card-send' }, [icon('download'), el('span', { textContent: 'Скачать' })])
+function downloadButton(title = 'Скачать видео') {
+  return el('button', { className: 'icon primary card-send', title, ariaLabel: title }, [icon('download')])
 }
 
 function preview(item) {
   const box = el('div', { className: `preview preview-${item.kind}` })
-  const kindIcon = ['video', 'stream'].includes(item.kind) ? 'video' : item.kind === 'audio' ? 'audio' : ['magnet', 'torrent'].includes(item.kind) ? 'magnet' : 'file'
+  const kindIcon = item.kind === 'playlist' ? 'playlist' : ['video', 'stream'].includes(item.kind) ? 'video' : item.kind === 'audio' ? 'audio' : ['magnet', 'torrent'].includes(item.kind) ? 'magnet' : 'file'
   box.append(el('div', { className: 'preview-fallback' }, [icon(kindIcon), el('span', { textContent: KIND_LABEL[item.kind] || 'Файл' })]))
   if (item.thumbnail) {
     const img = el('img', { src: item.thumbnail, alt: '', referrerPolicy: 'no-referrer', loading: 'lazy' })
@@ -102,7 +97,8 @@ async function send(url, linkType, statusNode, button, { playlist = false } = {}
   const cardButton = button?.classList.contains('card-send')
   if (cardButton) {
     button.setAttribute('aria-busy', 'true')
-    button.replaceChildren(icon('loader'), el('span', { textContent: 'Отправка' }))
+    button.replaceChildren(icon('loader'))
+    button.title = button.ariaLabel = 'Отправка в LMS'
   }
   statusNode.textContent = 'Отправка…'
   statusNode.className = 'result muted'
@@ -119,13 +115,17 @@ async function send(url, linkType, statusNode, button, { playlist = false } = {}
     statusNode.className = 'result ok'
     if (cardButton) {
       button.classList.add('sent')
-      button.replaceChildren(icon('check'), el('span', { textContent: 'В очереди' }))
+      button.replaceChildren(icon('check'))
+      button.title = button.ariaLabel = 'Добавлено в очередь'
     }
   } else {
     statusNode.textContent = result?.error || 'Ошибка'
     statusNode.className = 'result error'
     if (button) button.disabled = false
-    if (cardButton) button.replaceChildren(icon('refresh'), el('span', { textContent: 'Повторить' }))
+    if (cardButton) {
+      button.replaceChildren(icon('refresh'))
+      button.title = button.ariaLabel = 'Повторить скачивание'
+    }
   }
   if (cardButton) button.setAttribute('aria-busy', 'false')
 }
@@ -136,8 +136,6 @@ function renderItems(items) {
   for (const [url, entry] of itemRows) {
     if (!urls.has(url)) { entry.row.remove(); itemRows.delete(url) }
   }
-  $('count').textContent = items.length ? String(items.length) : ''
-  $('empty').hidden = items.length > 0
   for (const item of items) {
     const previous = itemRows.get(item.url)
     const signature = JSON.stringify(item)
@@ -179,6 +177,7 @@ function renderItems(items) {
     typeSelect.addEventListener('change', () => { entry.chosen = true })
     itemRows.set(item.url, entry)
   }
+  updatePageCount()
 }
 
 function formatDuration(seconds) {
@@ -204,24 +203,31 @@ function formatSize(bytes) {
 /** yt-dlp results: one video, or playlist entries with checkboxes. */
 function renderExtract(result) {
   const box = $('ytdlp')
-  box.hidden = false
   box.replaceChildren()
-  const node = result.nodeName ? ` · нода ${result.nodeName}` : ''
+  box.hidden = result.kind !== 'playlist'
+  $('single-video').hidden = true
+  $('single-video').replaceChildren()
+  $('playlist-count').textContent = ''
+  $('playlist-empty').hidden = result.kind === 'playlist'
 
   if (result.kind !== 'playlist') {
     const status = el('div', { className: 'result', role: 'status' })
     const button = downloadButton()
     button.addEventListener('click', () => send(result.url, 'YTDLP', status, button))
-    box.append(
-      el('h2', { className: 'section-title', textContent: `yt-dlp нашёл видео${node}` }),
+    $('single-video').hidden = false
+    $('empty').hidden = true
+    $('playlist-empty-text').textContent = 'Найден один ролик. Он находится во вкладке «На текущей странице».'
+    $('single-video').append(
       mediaCard({ ...result, name: result.title || result.url, kind: 'video' }, [button], status, 'div')
     )
+    updatePageCount()
     return
   }
 
   const entries = result.entries || []
   const total = result.entryCount || entries.length
-  box.append(el('h2', { className: 'section-title', textContent: `Плейлист${node}` }))
+  $('playlist-count').textContent = total ? String(total) : ''
+  updatePageCount()
   if (!entries.length) {
     box.append(el('p', { className: 'hint muted', textContent: 'Список роликов недоступен. Можно отправить весь плейлист.' }))
   }
@@ -229,16 +235,31 @@ function renderExtract(result) {
   const checks = []
   const list = el('ul', { className: 'items entries' })
   for (const entry of entries) {
-    const check = el('input', { type: 'checkbox', checked: true })
+    const check = el('input', { type: 'checkbox', checked: true, ariaLabel: `Выбрать ролик ${entry.title || entry.url}` })
     checks.push({ check, entry })
-    const status = el('div', { className: 'result' })
+    const status = el('div', { className: 'result', role: 'status' })
     entry.status = status
+    const button = downloadButton(`Скачать ${entry.title || 'ролик'}`)
+    entry.button = button
+    button.addEventListener('click', async () => {
+      await send(entry.url, 'YTDLP', status, button)
+      if (status.classList.contains('ok')) {
+        const item = checks.find((item) => item.check === check)
+        item.sent = true
+        check.checked = false
+        check.disabled = true
+        refreshLabel()
+      }
+    })
     list.append(
       el('li', { className: 'entry' }, [
-        el('label', { className: 'entry-label' }, [
-          check,
-          el('span', { className: 'name', textContent: entry.title || entry.url, title: entry.url }),
-          el('span', { className: 'muted small', textContent: formatDuration(entry.durationSeconds) })
+        preview({ ...entry, kind: 'video' }),
+        el('div', { className: 'entry-info' }, [
+          el('div', { className: 'name', textContent: entry.title || entry.url, title: entry.title || entry.url }),
+          el('div', { className: 'entry-actions' }, [
+            el('label', { className: 'check' }, [check, el('span', { className: 'chip-on', textContent: 'Выбрано' }), el('span', { className: 'chip-off', textContent: 'Выбрать' })]),
+            button
+          ])
         ]),
         status
       ])
@@ -246,22 +267,29 @@ function renderExtract(result) {
   }
 
   const selectedCount = () => checks.filter((item) => item.check.checked).length
-  const sendSelected = el('button', { className: 'btn primary small' })
+  const sendSelected = downloadButton('Скачать выбранные ролики')
+  sendSelected.id = 'send-selected'
+  const selectedLabel = el('span', { className: 'muted selection-count' })
+  const allCheck = el('input', { type: 'checkbox', checked: checks.length > 0, disabled: !checks.length, ariaLabel: 'Выбрать все ролики' })
   const refreshLabel = () => {
-    sendSelected.textContent = `Скачать выбранные (${selectedCount()})`
+    selectedLabel.textContent = `Выбрано ${selectedCount()} из ${entries.length}`
+    sendSelected.title = sendSelected.ariaLabel = `Скачать выбранные ролики (${selectedCount()})`
     sendSelected.disabled = selectedCount() === 0
+    allCheck.checked = selectedCount() > 0 && checks.every((item) => item.check.checked || item.sent)
+    allCheck.indeterminate = selectedCount() > 0 && !allCheck.checked
+    allCheck.disabled = !checks.length || checks.every((item) => item.sent)
   }
   checks.forEach((item) => item.check.addEventListener('change', refreshLabel))
   refreshLabel()
 
-  const toggle = el('button', { className: 'btn small', textContent: 'Все / ничего' })
-  toggle.addEventListener('click', () => {
-    const all = selectedCount() !== checks.length
-    checks.forEach((item) => (item.check.checked = all))
+  const toggle = el('label', { className: 'check' }, [allCheck, el('span', { textContent: 'Все ролики' })])
+  allCheck.addEventListener('change', () => {
+    checks.forEach((item) => { if (!item.sent) item.check.checked = allCheck.checked })
     refreshLabel()
   })
 
-  const whole = el('button', { className: 'btn primary playlist-download' }, [icon('download'), el('span', { textContent: 'Скачать весь плейлист' })])
+  const whole = downloadButton('Скачать весь плейлист')
+  whole.classList.add('playlist-download')
   const summary = el('div', { className: 'result', role: 'status' })
   whole.addEventListener('click', () => send(result.url, 'YTDLP', summary, whole, { playlist: true }))
 
@@ -278,6 +306,10 @@ function renderExtract(result) {
         item.sent = true
         item.check.checked = false
         item.check.disabled = true
+        item.entry.button.disabled = true
+        item.entry.button.classList.add('sent')
+        item.entry.button.replaceChildren(icon('check'))
+        item.entry.button.title = item.entry.button.ariaLabel = 'Добавлено в очередь'
       }
     }
     summary.textContent = `Отправлено ${ok} из ${chosen.length}`
@@ -285,30 +317,44 @@ function renderExtract(result) {
     refreshLabel()
   })
 
-  box.append(el('div', { className: 'playlist-summary' }, [
-    el('div', { className: 'name', textContent: result.title || 'Плейлист', title: result.title || '' }),
-    el('p', { className: 'hint muted', textContent: `${total || 'Все'} видео · одна задача · отдельная папка` }),
+  box.prepend(el('div', { className: 'playlist-summary' }, [
+    preview({ ...result, kind: 'playlist', thumbnail: result.thumbnail || entries.find((entry) => entry.thumbnail)?.thumbnail }),
+    el('div', { className: 'playlist-info' }, [
+      el('div', { className: 'name', textContent: result.title || 'Плейлист', title: result.title || '' }),
+      el('p', { className: 'hint muted', textContent: `${total || 'Все'} видео · весь плейлист` })
+    ]),
     whole
-  ]), summary, el('div', { className: 'row wrap' }, [sendSelected, toggle]), list)
+  ]))
+  box.append(summary, el('div', { className: 'selection-toolbar' }, [toggle, selectedLabel, sendSelected]), list)
+  decorateToggles(box)
   if (result.truncated) {
     box.append(el('p', { className: 'muted small', textContent: `Показаны первые ${entries.length} — для остальных отправьте весь плейлист.` }))
   }
 }
 
-async function runExtract(tabId, url, force = false) {
+async function runExtract(tabId, url, force = false, activate = false) {
+  const generation = ++extractGeneration
   const button = $('extract')
-  const box = $('ytdlp')
+  const feedback = $('extract-feedback')
   button.disabled = true
-  button.textContent = 'yt-dlp разбирает страницу…'
-  box.hidden = false
-  box.replaceChildren(el('p', { className: 'muted small', textContent: 'Это может занять до минуты на больших плейлистах.' }))
-  const answer = await chrome.runtime.sendMessage({ type: 'extract', tabId, url, force })
+  button.replaceChildren(icon('loader'))
+  button.setAttribute('aria-busy', 'true')
+  feedback.className = 'result muted'
+  feedback.textContent = 'Ищем видео и плейлист…'
+  let answer
+  try { answer = await chrome.runtime.sendMessage({ type: 'extract', tabId, url, force }) }
+  catch (error) { answer = { error: error.message } }
+  if (generation !== extractGeneration) return
   button.disabled = false
-  button.textContent = 'Найти через yt-dlp заново'
+  button.replaceChildren(icon('search'))
+  button.setAttribute('aria-busy', 'false')
   if (answer?.ok) {
+    feedback.textContent = ''
     renderExtract(answer.result)
+    if (activate) selectTab(answer.result.kind === 'playlist' ? 'playlist' : 'page')
   } else {
-    box.replaceChildren(el('div', { className: 'result error', textContent: `yt-dlp: ${answer?.error || 'ошибка'}` }))
+    feedback.className = 'result error'
+    feedback.textContent = answer?.error || 'Не удалось найти видео'
   }
 }
 
@@ -327,9 +373,25 @@ async function checkRouter() {
 }
 
 async function init() {
+  hydrateIcons()
+  decorateToggles()
   $('open-ui').replaceChildren(icon('external'))
   $('open-options').replaceChildren(icon('settings'))
-  $('rescan').prepend(icon('refresh'))
+  $('rescan').replaceChildren(icon('refresh'))
+  $('extract').replaceChildren(icon('search'))
+  $('send-page').replaceChildren(icon('download'))
+  $('send-page').classList.add('card-send')
+  for (const name of ['page', 'playlist']) {
+    const tabButton = $(`tab-${name}`)
+    tabButton.addEventListener('click', () => selectTab(name))
+    tabButton.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      const next = event.key === 'Home' ? 'page' : event.key === 'End' ? 'playlist' : name === 'page' ? 'playlist' : 'page'
+      selectTab(next)
+      $(`tab-${next}`).focus()
+    })
+  }
   settings = { ...DEFAULT_SETTINGS, ...(await chrome.storage.sync.get(DEFAULT_SETTINGS)) }
   $('speed').value = String(settings.maxSpeedBytes || 0)
   if (!$('speed').value) $('speed').value = '0'
@@ -354,22 +416,28 @@ async function init() {
   $('page-title').textContent = data?.title || tab?.title || pageUrl
   $('page-title').title = pageUrl
   const pageStatus = el('div', { className: 'result' })
-  $('page-title').after(pageStatus)
+  $('panel-page').prepend(pageStatus)
   const sendPage = $('send-page')
   if (!isHttp(pageUrl)) sendPage.disabled = true
   if (data?.videoHost) sendPage.classList.add('primary')
   sendPage.addEventListener('click', () => send(pageUrl, 'YTDLP', pageStatus, sendPage))
 
   const extractButton = $('extract')
-  const canExtract = isHttp(pageUrl) && Boolean(normalizeRouterUrl(settings.routerUrl))
-  extractButton.disabled = !canExtract
+  const canExtract = () => isHttp(pageUrl) && Boolean(normalizeRouterUrl(settings.routerUrl))
+  extractButton.disabled = !canExtract()
   let extracted = false
   extractButton.addEventListener('click', () => {
-    void runExtract(tab?.id, pageUrl, extracted)
+    void runExtract(tab?.id, pageUrl, extracted, true)
     extracted = true
   })
+  onPlaylistActivate = () => {
+    if (!extracted && canExtract() && !extractButton.disabled) {
+      extracted = true
+      void runExtract(tab?.id, pageUrl)
+    }
+  }
   // Video sites are what yt-dlp is for: look right away (the worker caches the answer).
-  if (canExtract && data?.videoHost) {
+  if (canExtract() && data?.videoHost) {
     extracted = true
     void runExtract(tab?.id, pageUrl)
   }
@@ -379,7 +447,7 @@ async function init() {
   $('quick').addEventListener('submit', (event) => {
     event.preventDefault()
     const url = $('quick-url').value.trim()
-    if (url) void send(url, undefined, quickStatus)
+    if (url) void send(url, undefined, quickStatus, $('quick').querySelector('button'))
   })
 
   renderItems(data?.items || [])
@@ -394,11 +462,21 @@ async function init() {
     const latest = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id })
     if (!latest) return
     if (latest.pageUrl && latest.pageUrl !== pageUrl) {
+      extractGeneration++
       pageUrl = latest.pageUrl
       $('page-title').textContent = latest.title || pageUrl
       $('page-title').title = pageUrl
       $('ytdlp').hidden = true
+      $('ytdlp').replaceChildren()
+      $('single-video').hidden = true
+      $('single-video').replaceChildren()
+      $('playlist-count').textContent = ''
+      $('playlist-empty').hidden = false
+      $('playlist-empty-text').textContent = 'Откройте страницу с плейлистом. Здесь появятся его ролики и превью.'
+      $('extract-feedback').textContent = ''
       extracted = false
+      extractButton.replaceChildren(icon('search'))
+      extractButton.setAttribute('aria-busy', 'false')
       extractButton.disabled = !isHttp(pageUrl) || !normalizeRouterUrl(settings.routerUrl)
       sendPage.disabled = !isHttp(pageUrl)
     }

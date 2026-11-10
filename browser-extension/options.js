@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences } from './lib/preferences.js'
+import { decorateToggles } from './lib/ui.js'
 
 const $ = (id) => document.getElementById(id)
 const TEXT = ['routerUrl', 'username', 'password']
@@ -13,6 +14,7 @@ function save(patch) {
 }
 
 async function init() {
+  decorateToggles()
   const settings = { ...DEFAULT_SETTINGS, ...(await chrome.storage.sync.get(DEFAULT_SETTINGS)) }
 
   for (const key of TEXT) {
