@@ -46,14 +46,16 @@ type Dependencies struct {
 }
 
 type Handler struct {
-	db            *sql.DB
-	version       string
-	jobRepo       domain.JobRepository
-	nodeRepo      domain.NodeRepository
-	profileRepo   domain.ProfileRepository
-	jobController JobController
-	nodeClient    domain.NodeClient
-	httpClient    *http.Client
+	mediaGrants      *mediaGrants
+	accountProtected bool
+	db               *sql.DB
+	version          string
+	jobRepo          domain.JobRepository
+	nodeRepo         domain.NodeRepository
+	profileRepo      domain.ProfileRepository
+	jobController    JobController
+	nodeClient       domain.NodeClient
+	httpClient       *http.Client
 }
 
 type createJobRequest struct {
@@ -84,20 +86,21 @@ type jobPreflightNodeOptionResponse struct {
 }
 
 type jobPreflightNodeResponse struct {
-	YtdlpOptionsSupported bool                             `json:"ytdlpOptionsSupported"`
-	NodeID                string                           `json:"nodeId"`
-	NodeName              string                           `json:"nodeName"`
-	Status                string                           `json:"status"`
-	StatusText            string                           `json:"statusText"`
-	PingMs                *int64                           `json:"pingMs,omitempty"`
-	URL                   string                           `json:"url"`
-	SizeBytes             *int64                           `json:"sizeBytes,omitempty"`
-	SizeKnown             bool                             `json:"sizeKnown"`
-	RecommendedType       string                           `json:"recommendedType,omitempty"`
-	SupportedTypes        []string                         `json:"supportedTypes"`
-	Options               []jobPreflightNodeOptionResponse `json:"options"`
-	DefaultStoragePath    string                           `json:"defaultStoragePath,omitempty"`
-	Error                 *string                          `json:"error,omitempty"`
+	AdvancedOptionsSupported bool                             `json:"advancedOptionsSupported"`
+	YtdlpOptionsSupported    bool                             `json:"ytdlpOptionsSupported"`
+	NodeID                   string                           `json:"nodeId"`
+	NodeName                 string                           `json:"nodeName"`
+	Status                   string                           `json:"status"`
+	StatusText               string                           `json:"statusText"`
+	PingMs                   *int64                           `json:"pingMs,omitempty"`
+	URL                      string                           `json:"url"`
+	SizeBytes                *int64                           `json:"sizeBytes,omitempty"`
+	SizeKnown                bool                             `json:"sizeKnown"`
+	RecommendedType          string                           `json:"recommendedType,omitempty"`
+	SupportedTypes           []string                         `json:"supportedTypes"`
+	Options                  []jobPreflightNodeOptionResponse `json:"options"`
+	DefaultStoragePath       string                           `json:"defaultStoragePath,omitempty"`
+	Error                    *string                          `json:"error,omitempty"`
 }
 
 type jobPreflightResponse struct {
@@ -223,20 +226,25 @@ type profileResponse struct {
 
 func NewHandler(deps Dependencies) http.Handler {
 	h := &Handler{
-		db:            deps.DB,
-		version:       deps.Version,
-		jobRepo:       deps.JobRepo,
-		nodeRepo:      deps.NodeRepo,
-		profileRepo:   deps.ProfileRepo,
-		jobController: deps.JobController,
-		nodeClient:    deps.NodeClient,
-		httpClient:    &http.Client{Timeout: 1500 * time.Millisecond},
+		mediaGrants:      newMediaGrants(),
+		accountProtected: deps.AccountOrigin != "",
+		db:               deps.DB,
+		version:          deps.Version,
+		jobRepo:          deps.JobRepo,
+		nodeRepo:         deps.NodeRepo,
+		profileRepo:      deps.ProfileRepo,
+		jobController:    deps.JobController,
+		nodeClient:       deps.NodeClient,
+		httpClient:       &http.Client{Timeout: 1500 * time.Millisecond},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/ui/system/health", h.health)
 	mux.HandleFunc("/api/ui/system/version", h.versionInfo)
 	mux.HandleFunc("/api/ui/jobs/preflight", h.preflightJob)
 	mux.HandleFunc("/api/ui/media/extract", h.extractMedia)
+	mux.HandleFunc("/api/ui/media/info", h.mediaInspect)
+	mux.HandleFunc("/api/ui/media/preview", h.mediaPrepare)
+	mux.HandleFunc("/api/ui/media/stream/", h.mediaStream)
 	mux.HandleFunc("/api/ui/jobs", h.jobsRoot)
 	mux.HandleFunc("/api/ui/jobs/", h.jobsByID)
 	mux.HandleFunc("/api/ui/nodes", h.nodesRoot)
@@ -245,7 +253,7 @@ func NewHandler(deps Dependencies) http.Handler {
 	if deps.StaticDir != "" {
 		mux.HandleFunc("/", spaHandler(deps.StaticDir))
 	}
-	return withAccount(mux, deps.AccountOrigin, deps.PublicOrigin, deps.AccountGatewayToken)
+	return withAccountStreams(mux, deps.AccountOrigin, deps.PublicOrigin, deps.AccountGatewayToken, h.mediaGrants.token)
 }
 
 func spaHandler(staticDir string) http.HandlerFunc {
@@ -341,6 +349,7 @@ func (h *Handler) preflightJob(w http.ResponseWriter, r *http.Request) {
 				item.SupportedTypes = resp.SupportedTypes
 				item.DefaultStoragePath = resp.DefaultStoragePath
 				item.YtdlpOptionsSupported = resp.YtdlpOptionsSupported
+				item.AdvancedOptionsSupported = resp.AdvancedOptionsSupported
 				for _, option := range resp.Options {
 					item.Options = append(item.Options, jobPreflightNodeOptionResponse{
 						Type:              option.Type,

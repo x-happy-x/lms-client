@@ -43,8 +43,9 @@ type Client struct {
 	// slowClient is for requests where the node runs a tool before answering (yt-dlp extraction).
 	slowClient *http.Client
 	// streamClient has no overall timeout: file bodies can take hours to transfer.
-	streamClient *http.Client
-	cfg          ClientConfig
+	streamClient  *http.Client
+	previewClient *http.Client
+	cfg           ClientConfig
 }
 
 func NewClient(cfg ClientConfig) *Client {
@@ -65,10 +66,11 @@ func NewClient(cfg ClientConfig) *Client {
 	}
 
 	return &Client{
-		httpClient:   &http.Client{Timeout: cfg.DefaultTimeout},
-		slowClient:   &http.Client{Timeout: 2 * time.Minute},
-		streamClient: newStreamClient(cfg.DefaultTimeout),
-		cfg:          cfg,
+		httpClient:    &http.Client{Timeout: cfg.DefaultTimeout},
+		slowClient:    &http.Client{Timeout: 2 * time.Minute},
+		streamClient:  newStreamClient(cfg.DefaultTimeout),
+		previewClient: newStreamClient(45 * time.Second),
+		cfg:           cfg,
 	}
 }
 

@@ -24,7 +24,7 @@ func TestVideoOptionsAreValidatedAndStoredWithDestination(t *testing.T) {
 	t.Parallel()
 	f := newStreamFixture(t)
 	resp, err := http.Post(f.server.URL+"/api/ui/jobs", "application/json", strings.NewReader(
-		`{"type":"YTDLP","url":"https://example.com/list","storagePath":"courses","ytdlpOptions":{"maxHeight":1080,"container":"mp4","playlist":true}}`))
+		`{"type":"YTDLP","url":"https://example.com/list","storagePath":"courses","ytdlpOptions":{"maxHeight":1080,"container":"mp4","playlist":true,"maxFps":30,"startSeconds":0,"endSeconds":90,"forceKeyframes":true,"embedMetadata":true}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +43,9 @@ func TestVideoOptionsAreValidatedAndStoredWithDestination(t *testing.T) {
 	if stored.YtdlpOptions == nil || *stored.YtdlpOptions.MaxHeight != 1080 || !*stored.YtdlpOptions.Playlist || *stored.StoragePath != "courses" {
 		t.Fatalf("options or destination lost: %+v", stored)
 	}
+	if *stored.YtdlpOptions.MaxFPS != 30 || *stored.YtdlpOptions.StartSeconds != 0 || *stored.YtdlpOptions.EndSeconds != 90 || !stored.YtdlpOptions.ForceKeyframes || !stored.YtdlpOptions.EmbedMetadata {
+		t.Fatal("advanced options lost")
+	}
 	stored.Message = new(string)
 	if err := f.jobRepo.Update(context.Background(), stored); err != nil {
 		t.Fatal(err)
@@ -55,6 +58,9 @@ func TestVideoOptionsAreValidatedAndStoredWithDestination(t *testing.T) {
 		`{"type":"DIRECT","url":"https://example.com/v","ytdlpOptions":{"playlist":true}}`,
 		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"maxHeight":10000}}`,
 		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"container":"--exec"}}`,
+		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"startSeconds":90,"endSeconds":10}}`,
+		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"maxFps":999}}`,
+		`{"type":"YTDLP","url":"https://example.com/v","ytdlpOptions":{"audioFormat":"--exec"}}`,
 	} {
 		r, err := http.Post(f.server.URL+"/api/ui/jobs", "application/json", strings.NewReader(body))
 		if err != nil {

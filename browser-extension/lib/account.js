@@ -6,7 +6,7 @@ const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)))
 
 async function clearExtracts() {
   const values = await chrome.storage.session.get(null)
-  await chrome.storage.session.remove(Object.keys(values).filter(key => key.startsWith('extract:')))
+  await chrome.storage.session.remove(Object.keys(values).filter(key => key.startsWith('extract:') || key.startsWith('preview:') || key.startsWith('previewTab:') || key === 'lmsJobs'))
 }
 
 async function forgetAccount() {

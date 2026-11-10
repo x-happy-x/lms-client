@@ -7,7 +7,7 @@
   </head>
   <body class="options">
     <main>
-      <h1><img src="icons/icon48.png" alt="" width="32" height="32" /> LMS — настройки</h1>
+      <h1><img src="icons/icon48.png" alt="" width="32" height="32" /> LMS — настройки <span id="extension-version" class="muted small"></span></h1>
 
       <section class="card">
         <h2>Роутер</h2>
@@ -31,6 +31,14 @@
         <label class="field"><span>Адрес Account</span><input id="accountUrl" type="url" placeholder="https://account.crubs.crazedns.ru" autocomplete="off" /></label>
         <div id="account-panel" class="account-panel"><span class="account-avatar" data-icon="user"></span><div class="grow"><strong id="account-title">Вход через Account</strong><p id="account-detail" class="hint muted" role="status">Проверяем подключение…</p></div><button id="account-action" class="btn primary" type="button" disabled>Войти</button></div>
         <p class="hint muted">Вход откроется на сайте Account. Расширение получает доступ только к LMS на 30 дней; отозвать его можно в профиле Account.</p>
+      </section>
+
+      <section id="discovery-filter" class="card">
+        <h2>Фильтр найденных файлов</h2>
+        <label class="field"><span>Скрывать расширения</span><input id="discoveryIgnoredExtensions" type="text" placeholder="mp3, wav, gif" autocomplete="off" spellcheck="false" /></label>
+        <p class="hint muted">Укажите через запятую или пробел. Можно писать mp3, .mp3 или *.mp3. Пустое поле показывает все расширения.</p>
+        <label class="field narrow"><span>Скрывать файлы меньше, МБ</span><input id="discoveryMinMb" type="number" min="0" step="0.1" /></label>
+        <p class="hint muted">Для списка «На текущей странице». Размер неизвестен — файл остаётся видимым. Значение 0 отключает ограничение размера.</p>
       </section>
 
       <section class="card">
@@ -62,7 +70,7 @@
           <label class="field"><span>Качество видео (yt-dlp)</span><select id="videoMaxHeight"><option value="0">Лучшее доступное</option><option value="2160">До 2160p · 4K</option><option value="1440">До 1440p</option><option value="1080">До 1080p · Full HD</option><option value="720">До 720p · HD</option><option value="480">До 480p</option><option value="360">До 360p</option></select></label>
           <label class="field"><span>Контейнер видео</span><select id="videoContainer"><option value="auto">Автоматически</option><option value="mp4">MP4</option><option value="mkv">MKV</option></select></label>
         </div>
-        <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио · M4A</label>
+        <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио</label>
         <p class="hint muted">Разрешение — верхний предел. Прямые HTTP-загрузки сохраняют исходный файл.</p>
         <div class="row"><label class="field grow"><span>Нода по умолчанию</span><select id="downloadNodeId"><option value="">Автоматически</option></select></label><button id="refresh-destinations" class="btn small" type="button">Обновить</button></div>
         <label class="field"><span>Папка на ноде</span><input id="downloadPath" list="download-paths" placeholder="По умолчанию или, например, video/courses" autocomplete="off" /></label>

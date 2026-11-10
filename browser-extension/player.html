@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ru">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>LMS — просмотр видео</title><link rel="stylesheet" href="ui.css" /></head>
+  <body class="player-page">
+    <main>
+      <header class="player-header"><img src="icons/icon32.png" alt="" width="28" height="28" /><div class="grow"><span class="muted small">LMS · просмотр</span><h1 id="player-title">Видео</h1></div><a id="player-source" class="btn" target="_blank" rel="noopener noreferrer" hidden>Страница источника</a></header>
+      <div class="player-stage"><video id="player-video" controls playsinline preload="metadata" controlslist="nodownload" aria-label="Просмотр видео" referrerpolicy="no-referrer"></video></div>
+      <div id="player-timeline" class="player-timeline" hidden><span id="player-position">0:00</span><input id="player-seek" type="range" min="0" max="1" step="1" value="0" aria-label="Позиция воспроизведения" /><span id="player-duration"></span></div>
+      <div class="player-toolbar"><button id="player-toggle" class="btn primary" disabled><span data-icon="play"></span>Воспроизвести</button><span id="player-status" class="grow muted" role="status">Открываю видео…</span><label id="player-quality-field" class="player-quality" hidden><span>Качество</span><select id="player-quality" aria-label="Качество просмотра"><option value="">Автоматически</option></select></label></div>
+    </main>
+    <script type="module" src="player.js"></script>
+  </body>
+</html>

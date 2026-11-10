@@ -3,7 +3,7 @@
   <head><meta charset="utf-8" /><title>LMS</title><link rel="stylesheet" href="ui.css" /></head>
   <body class="popup">
     <header class="bar">
-      <img src="icons/icon32.png" alt="" width="22" height="22" /><strong>LMS</strong>
+      <img src="icons/icon32.png" alt="" width="22" height="22" /><strong>LMS</strong><span id="extension-version" class="muted small"></span>
       <span id="status" class="pill muted">…</span><span class="grow"></span>
       <button id="open-ui" class="icon" title="Открыть LMS" aria-label="Открыть LMS"></button>
       <button id="open-options" class="icon" title="Настройки" aria-label="Настройки"></button>
@@ -29,7 +29,7 @@
           <label class="field"><span>Контейнер</span><select id="videoContainer"><option value="auto">Автоматически</option><option value="mp4">MP4</option><option value="mkv">MKV</option></select></label>
         </div>
         <div class="row spread">
-          <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио · M4A</label>
+          <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио</label>
           <label class="speed"><span class="sr-only">Ограничение скорости</span><select id="speed" aria-label="Ограничение скорости"><option value="0">Без лимита</option><option value="1048576">1 МБ/с</option><option value="5242880">5 МБ/с</option><option value="10485760">10 МБ/с</option><option value="26214400">25 МБ/с</option><option value="52428800">50 МБ/с</option></select></label>
         </div>
         <div class="row"><label class="field grow"><span>Нода</span><select id="downloadNodeId"><option value="">Автоматически</option></select></label><button id="refresh-destinations" class="icon icon-bordered" type="button" title="Обновить ноды и папки" aria-label="Обновить ноды и папки"></button></div>
@@ -40,8 +40,10 @@
     </details>
     <div id="extract-feedback" class="result muted" role="status"></div>
     <section id="panel-page" role="tabpanel" aria-labelledby="tab-page">
-      <div class="findings-heading row"><span class="list-caption grow">Найденные файлы</span><button id="rescan" class="icon" title="Обновить видео на странице" aria-label="Обновить видео на странице"></button></div>
+      <div class="findings-heading row"><span class="list-caption grow">Найденные файлы</span><button id="open-filter" class="icon" title="Настроить фильтр файлов" aria-label="Настроить фильтр файлов" data-icon="filter"></button><button id="rescan" class="icon" title="Обновить видео на странице" aria-label="Обновить видео на странице"></button></div>
+      <p id="filter-status" class="hint muted" role="status" hidden></p>
       <div id="single-video" class="ytdlp" hidden></div><ul id="items" class="items"></ul>
+      <details id="technical-streams" class="disclosure technical-streams" hidden><summary><span class="disclosure-icon" data-icon="audio"></span><span class="grow">Потоки проигрывателя VK <span id="technical-count" class="muted"></span></span><span class="disclosure-chevron" data-icon="chevron"></span></summary><p class="hint muted">Отдельные аудио- и видеодорожки. Для полного ролика со звуком выберите качество в карточке видео выше.</p><ul id="technical-items" class="items"></ul></details>
       <div id="empty" class="empty-state" hidden><span data-icon="video"></span><strong>Пока ничего не найдено</strong><p class="muted">Запустите видео на странице или воспользуйтесь поиском вверху.</p></div>
     </section>
     <section id="panel-playlist" role="tabpanel" aria-labelledby="tab-playlist" hidden>

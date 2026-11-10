@@ -51,6 +51,7 @@ export function hostOf(url) {
 
 export function isVideoHost(url) {
   const host = hostOf(url)
+  if (['yandex.ru', 'www.yandex.ru'].includes(host)) return /^\/video\/preview\/\d+/.test(new URL(url).pathname)
   return VIDEO_HOSTS.some((item) => host === item || host.endsWith(`.${item}`))
 }
 
@@ -125,8 +126,8 @@ export function normalizeCandidates(candidates, baseUrl) {
       }
       if (!isHttp(url)) continue
     }
-    const kind = (DOWNLOADABLE.has(candidate.kind) ? candidate.kind : '') || kindOf(url) ||
-      (['video', 'audio', 'stream'].includes(candidate.source) ? candidate.source : '')
+    const kind = (DOWNLOADABLE.has(candidate.kind) ? candidate.kind : '') ||
+      (['video', 'audio', 'stream'].includes(candidate.source) ? candidate.source : '') || kindOf(url)
     const keep = kind === 'magnet' || DOWNLOADABLE.has(kind) || candidate.source === 'download-attr'
     if (!keep) continue
     const item = seen.get(url) || { url, kind: kind || 'file', name: displayName(url), source: candidate.source }
