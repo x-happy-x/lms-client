@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences } from './lib/preferences.js'
 import { decorateToggles, hydrateIcons } from './lib/ui.js'
 import { initAccountUI } from './lib/account-ui.js'
+import { parseIgnoredExtensions, discoveryMinMb } from './lib/discovery-filter.js'
 
 const $ = (id) => document.getElementById(id)
 const TEXT = ['routerUrl', 'accountUrl', 'username', 'password']
@@ -19,6 +20,19 @@ async function init() {
   hydrateIcons()
   const settings = { ...DEFAULT_SETTINGS, ...(await chrome.storage.sync.get(DEFAULT_SETTINGS)) }
   const refreshAccount = initAccountUI()
+  $('extension-version').textContent = chrome.runtime.getManifest().version
+  $('discoveryIgnoredExtensions').value = parseIgnoredExtensions(settings.discoveryIgnoredExtensions).join(', ')
+  $('discoveryIgnoredExtensions').addEventListener('change', () => {
+    const value = parseIgnoredExtensions($('discoveryIgnoredExtensions').value)
+    $('discoveryIgnoredExtensions').value = value.join(', ')
+    save({ discoveryIgnoredExtensions: value })
+  })
+  $('discoveryMinMb').value = String(discoveryMinMb(settings.discoveryMinMb))
+  $('discoveryMinMb').addEventListener('change', () => {
+    const value = discoveryMinMb($('discoveryMinMb').value)
+    $('discoveryMinMb').value = String(value)
+    save({ discoveryMinMb: value })
+  })
 
   for (const key of TEXT) {
     $(key).value = settings[key] || ''

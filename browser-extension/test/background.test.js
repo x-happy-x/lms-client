@@ -54,8 +54,8 @@ test('reload and query-only SPA navigation discard findings from the previous pa
   assert.deepEqual((await findings(20)).items, [])
 })
 
-test('a website content script cannot start login, logout or inspect the Account session', async () => {
-  for (const type of ['accountLogin', 'accountLogout', 'accountStatus']) {
+test('a website content script cannot start login, inspect the Account session or open a preview tab', async () => {
+  for (const type of ['accountLogin', 'accountLogout', 'accountStatus', 'preview', 'prepareStream', 'mediaInfo', 'jobProgress']) {
     const result = await message({ type }, { url: 'https://example.com', tab: { id: 1 } })
     assert.equal(result.ok, false)
     assert.match(result.error, /только из окна расширения/)
@@ -69,4 +69,50 @@ test('an authentication challenge is reported separately from a connection failu
     const result = await message({ type: 'health', settings: { routerUrl: 'https://lms.example' } })
     assert.deepEqual(result, { ok: false, error: 'Войдите через Account', authRequired: true })
   } finally { globalThis.fetch = previous }
+})
+
+test('discovery filters merge DOM/network metadata and settings reveal retained findings immediately', async () => {
+  await scan(60, 'https://example.com/watch', [
+    { url: '/large.mp4', sizeBytes: 2 * 1024 ** 2 },
+    { url: '/small.mp4', sizeBytes: 100 },
+    { url: '/track.MP3?token=1', sizeBytes: 8 * 1024 ** 2 },
+    { url: '/unknown.webm' }
+  ])
+  await sniff(60, 'https://cdn.example/audio?id=1', 'audio/mpeg')
+  chrome.webRequest.onHeadersReceived.listeners[0]({ tabId: 60, url: 'https://cdn.example/range.mp4', statusCode: 206, type: 'media', responseHeaders: [
+    { name: 'Content-Type', value: 'video/mp4' }, { name: 'Content-Length', value: '100' }, { name: 'Content-Range', value: 'bytes 0-99/2097152' }
+  ] })
+  await sniff(60, 'https://cdn.example/manifest.m3u8', 'application/vnd.apple.mpegurl')
+  let result = await findings(60)
+  assert.equal(result.hiddenCount, 3)
+  assert.equal(result.items.length, 4)
+  assert.ok(result.items.some(item => item.url.endsWith('range.mp4') && item.sizeBytes === 2097152))
+  chrome.storage.onChanged.listeners[0]({ discoveryIgnoredExtensions: { newValue: [] }, discoveryMinMb: { newValue: 0 } }, 'sync')
+  result = await findings(60)
+  assert.equal(result.items.length, 7)
+  assert.equal(result.hiddenCount, 0)
+  chrome.storage.onChanged.listeners[0]({ discoveryIgnoredExtensions: { newValue: ['mp3'] }, discoveryMinMb: { newValue: 1 } }, 'sync')
+  assert.equal((await findings(60)).hiddenCount, 3)
+})
+
+test('forbidden access is distinguished from an offline router', async () => {
+  const previous = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Нет доступа к LMS' }), { status: 403 })
+    const result = await message({ type: 'health', settings: { routerUrl: 'https://lms.example' } })
+    assert.equal(result.accessDenied, true)
+    assert.equal(result.authRequired, false)
+  } finally { globalThis.fetch = previous }
+})
+
+test('VK player context associates CDN tracks with its canonical source and clears on navigation', async () => {
+ await message({type:'scan',pageUrl:'https://yandex.ru/video/preview/123',title:'Selected video',mediaSourceUrl:'https://vk.com/video-1_2?sh=4',context:{thumbnail:'https://example.com/poster.jpg'},items:[]},{tab:{id:80},frameId:0})
+ await sniff(80,'https://vk2-4.vkuser.net/?mid=1&id=2&sig=one','audio/webm')
+ await sniff(80,'https://vk2-4.vkuser.net/?mid=1&id=2&sig=two','audio/webm')
+ const state=await findings(80)
+ assert.equal(state.mediaSourceUrl,'https://vkvideo.ru/video-1_2')
+ assert.equal(state.items.length,1);assert.equal(state.items[0].kind,'audio')
+ assert.match(state.items[0].name,/Selected video/);assert.equal(state.items[0].thumbnail,'https://example.com/poster.jpg')
+ await scan(80,'https://yandex.ru/video/preview/456',[])
+ assert.equal((await findings(80)).mediaSourceUrl,'');assert.deepEqual((await findings(80)).items,[])
 })

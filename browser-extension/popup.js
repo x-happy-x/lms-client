@@ -1,8 +1,9 @@
-import { icon, decorateToggles, hydrateIcons } from './lib/ui.js'
+import { icon, decorateToggles, hydrateIcons, decorateSelect, decorateSelects } from './lib/ui.js'
 import { extensionOf, hostOf, isHttp, isMagnet, normalizeRouterUrl, suggestType } from './lib/links.js'
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences, videoOptions } from './lib/preferences.js'
 import { initAccountUI } from './lib/account-ui.js'
+import { isVkMedia } from './lib/media-source.js'
 
 const KIND_LABEL = {
   video: 'Видео',
@@ -29,6 +30,103 @@ let settings = { ...DEFAULT_SETTINGS }
 const itemRows = new Map()
 let onPlaylistActivate = () => {}
 let extractGeneration = 0
+let currentPageUrl = ''
+let latestJobs = [], progressTimer = 0, progressBusy = false
+const mediaOverrides = new Map()
+const infoCache = new Map(), infoQueue = []
+let infoActive = 0, infoGeneration = 0
+const infoObserver = new IntersectionObserver(entries => {
+  for (const entry of entries) if (entry.isIntersecting) {
+    infoObserver.unobserve(entry.target)
+    infoQueue.push({ row: entry.target, generation: infoGeneration }); void drainInfo()
+  }
+}, { rootMargin: '100px' })
+function watchInfo(row, item) {
+  row.dataset.mediaUrl = item.url
+  row.dataset.mediaPage = String(Boolean(item.page))
+  infoObserver.observe(row)
+}
+async function drainInfo() {
+  if (infoActive >= 2 || !infoQueue.length) return
+  const { row, generation } = infoQueue.shift()
+  if (!row.isConnected || generation !== infoGeneration) { void drainInfo(); return }
+  infoActive++
+  const key = `${row.dataset.mediaUrl}|${settings.downloadNodeId}|${settings.videoMaxHeight}|${settings.videoMaxFps}`
+  try {
+    let result = infoCache.get(key)
+    if (!result) {
+      const answer = await chrome.runtime.sendMessage({ type: 'mediaInfo', url: row.dataset.mediaUrl, direct: row.dataset.mediaPage !== 'true' })
+      if (!answer?.ok) throw new Error(answer?.error || 'Сведения недоступны')
+      result = answer.result; infoCache.set(key, result)
+    }
+    if (generation !== infoGeneration || !row.isConnected) return
+    const details = row.querySelector('.media-meta')
+    const size = el('span', { className: 'meta-tag' })
+    const variants = [...(result.variants || [])].filter(variant => variant.height > 0).reverse()
+    const quality = el('select', { title: 'Качество этого видео', ariaLabel: 'Качество этого видео' }, variants.map(variant => el('option', { value: `${variant.height}:${variant.fps || 0}`, textContent: variant.quality || `${variant.height}p` })))
+    if (!variants.length) quality.append(new Option(result.quality || 'Исходное', ''))
+    const chosen = mediaOverrides.get(row.dataset.mediaUrl)
+    quality.value = `${chosen?.maxHeight || result.height}:${chosen?.maxFps || result.fps || 0}`
+    if (!quality.value && quality.options.length) quality.selectedIndex = 0
+    const updateSize = () => {
+      const variant = variants.find(variant => `${variant.height}:${variant.fps || 0}` === quality.value) || result
+      size.textContent = variant.sizeBytes ? `${variant.sizeEstimated ? '≈ ' : ''}${formatSize(variant.sizeBytes)}` : 'Размер неизвестен'
+      size.title = 'Размер исходного ролика в выбранном качестве; итоговый фрагмент может отличаться'
+    }
+    quality.addEventListener('change', () => {
+      const [maxHeight, maxFps] = quality.value.split(':').map(Number)
+      mediaOverrides.set(row.dataset.mediaUrl, { ...(maxHeight ? { maxHeight } : {}), ...(maxFps ? { maxFps } : {}) }); updateSize()
+    })
+    details?.replaceChildren(quality, size); if (details) decorateSelect(quality); updateSize()
+  } catch (error) {
+    if (generation === infoGeneration && row.isConnected) { const details = row.querySelector('.media-meta'); if (details) { details.textContent = 'Качество и размер недоступны'; details.title = error.message } }
+  } finally { infoActive--; void drainInfo() }
+  void drainInfo()
+}
+
+async function pollProgress() {
+  if (progressBusy) return
+  progressBusy = true
+  try {
+    const answer = await chrome.runtime.sendMessage({ type: 'jobProgress' })
+    if (answer?.ok) { latestJobs = answer.jobs || []; paintProgress() }
+  } catch { /* retain the last known state on a temporary connection failure */ }
+  finally {
+    progressBusy = false; clearTimeout(progressTimer)
+    if (latestJobs.some(job => ['QUEUED', 'RUNNING', 'PAUSED'].includes(job.status))) progressTimer = setTimeout(pollProgress, 2000)
+  }
+}
+function paintProgress() {
+  const jobs = new Map(latestJobs.map(job => [job.url, job]))
+  for (const card of document.querySelectorAll('[data-media-url]')) {
+    const job = jobs.get(card.dataset.mediaUrl), box = card.querySelector('.preview')
+    if (!box) continue
+    if (!job) { box.querySelector('.download-water')?.remove(); continue }
+    let overlay = box.querySelector('.download-water')
+    if (!overlay) {
+      overlay = el('div', { className: 'download-water', role: 'progressbar' })
+      const fill = el('div', { className: 'water-fill' })
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      svg.setAttribute('viewBox', '0 0 400 40'); svg.setAttribute('preserveAspectRatio', 'none'); svg.classList.add('water-wave')
+      for (let index = 0; index < 2; index++) {
+        const path = document.createElementNS(svg.namespaceURI, 'path')
+        path.setAttribute('d', 'M0 20 Q25 0 50 20 T100 20 T150 20 T200 20 T250 20 T300 20 T350 20 T400 20 V40 H0Z'); path.classList.add(`wave-${index}`); svg.append(path)
+      }
+      fill.append(svg); overlay.append(fill, el('strong', { className: 'water-percent' }), el('span', { className: 'water-caption' })); box.append(overlay)
+    }
+    const labels = { QUEUED: 'В очереди', RUNNING: 'Загрузка', PAUSED: 'Пауза', DONE: 'Готово', ERROR: 'Ошибка', CANCELED: 'Отменено' }
+    const percent = job.status === 'DONE' ? 100 : Math.max(0, Math.min(100, Number(job.percent) || 0))
+    const known = job.percent != null || job.status === 'DONE'
+    overlay.dataset.state = job.status; overlay.classList.toggle('indeterminate', !known)
+    overlay.style.setProperty('--progress', `${percent}%`)
+    overlay.setAttribute('aria-label', `${labels[job.status] || job.status}: ${known ? `${Math.round(percent)}%` : 'размер неизвестен'}`)
+    overlay.setAttribute('aria-valuemin', '0'); overlay.setAttribute('aria-valuemax', '100')
+    if (known) overlay.setAttribute('aria-valuenow', String(Math.round(percent))); else overlay.removeAttribute('aria-valuenow')
+    overlay.querySelector('.water-percent').textContent = known ? `${Math.round(percent)}%` : '···'
+    overlay.querySelector('.water-caption').textContent = job.status === 'RUNNING' && job.speedBytes ? `${formatSize(job.speedBytes)}/с` : labels[job.status] || job.status
+    overlay.title = [labels[job.status], job.etaSeconds ? `Осталось ${formatDuration(job.etaSeconds)}` : '', job.errorText || ''].filter(Boolean).join(' · ')
+  }
+}
 
 function updatePageCount() {
   const count = itemRows.size + ($('single-video').hidden ? 0 : $('single-video').childElementCount)
@@ -48,6 +146,18 @@ function selectTab(name) {
 
 function downloadButton(title = 'Скачать видео') {
   return el('button', { className: 'icon primary card-send', title, ariaLabel: title }, [icon('download')])
+}
+
+function playButton(item, status) {
+  const button = el('button', { className: 'icon icon-bordered card-play', title: 'Смотреть без загрузки', ariaLabel: `Смотреть ${item.name || item.title || 'видео'}` }, [icon('play')])
+  button.addEventListener('click', async () => {
+    try {
+      const latest = itemRows.get(item.url)?.item || item
+      const answer = await chrome.runtime.sendMessage({ type: 'preview', item: { ...latest, ...mediaOverrides.get(item.url), sourceUrl: currentPageUrl } })
+      if (!answer?.ok) throw new Error(answer?.error || 'Не удалось открыть просмотр')
+    } catch (error) { status.textContent = error.message; status.className = 'result error' }
+  })
+  return button
 }
 
 function preview(item) {
@@ -75,7 +185,7 @@ function mediaDetails(item) {
 }
 
 function mediaCard(item, actions, status, tag = 'li') {
-  return el(tag, { className: 'item media-card' }, [
+  const card = el(tag, { className: 'item media-card' }, [
     preview(item),
     el('div', { className: 'info' }, [
       el('div', { className: 'name', textContent: item.name, title: item.name }),
@@ -85,6 +195,8 @@ function mediaCard(item, actions, status, tag = 'li') {
     el('div', { className: 'actions' }, actions),
     status
   ])
+  card.dataset.mediaUrl = item.url
+  return card
 }
 
 function el(tag, props = {}, children = []) {
@@ -108,10 +220,11 @@ async function send(url, linkType, statusNode, button, { playlist = false } = {}
   try { result = await chrome.runtime.sendMessage({
     type: 'send', url, linkType, maxSpeedBytes: speed, quiet: true,
     nodeId: settings.downloadNodeId, storagePath: $('downloadPath').value.trim(),
-    ytdlpOptions: linkType === 'YTDLP' ? videoOptions(settings, playlist) : undefined
+    ytdlpOptions: linkType === 'YTDLP' ? { ...videoOptions(settings, playlist), ...(!settings.videoAudioOnly ? mediaOverrides.get(url) : {}) } : undefined
   }) }
   catch (error) { result = { error: error.message } }
   if (result?.ok) {
+    void pollProgress()
     statusNode.replaceChildren(icon('check'), el('span', { textContent: `${result.nodeName || 'нода'} · ${TYPES.find(([key]) => key === result.type)?.[1] || result.type}` }))
     statusNode.className = 'result ok'
     if (cardButton) {
@@ -131,7 +244,9 @@ async function send(url, linkType, statusNode, button, { playlist = false } = {}
   if (cardButton) button.setAttribute('aria-busy', 'false')
 }
 
-function renderItems(items) {
+function renderItems(items, hiddenCount = 0) {
+  $('filter-status').hidden = hiddenCount === 0
+  $('filter-status').textContent = hiddenCount ? `Скрыто фильтром: ${hiddenCount}` : ''
   const list = $('items')
   const urls = new Set(items.map((item) => item.url))
   for (const [url, entry] of itemRows) {
@@ -150,6 +265,7 @@ function renderItems(items) {
         previous.select.value = item.kind === 'stream' ? 'YTDLP' : suggestType(item.url)
       }
       previous.kind = item.kind
+      previous.item = item
       previous.signature = signature
       continue
     }
@@ -172,13 +288,22 @@ function renderItems(items) {
         setTimeout(() => { copy.replaceChildren(icon('copy')); copy.title = 'Копировать ссылку' }, 1800)
       } catch { copy.title = 'Не удалось скопировать ссылку' }
     })
-    const row = mediaCard(item, [typeSelect, copy, button], status)
+    const row = mediaCard(item, [typeSelect, copy, ...(['video', 'stream'].includes(item.kind) ? [playButton(item, status)] : []), button], status)
     list.append(row)
-    const entry = { row, signature, kind: item.kind, select: typeSelect, chosen: false }
+    decorateSelect(typeSelect)
+    const entry = { row, signature, item, kind: item.kind, select: typeSelect, chosen: false }
     typeSelect.addEventListener('change', () => { entry.chosen = true })
     itemRows.set(item.url, entry)
   }
   updatePageCount()
+  let technical = 0
+  for (const entry of itemRows.values()) {
+    if (isVkMedia(entry.item.url)) { if (entry.row.parentElement !== $('technical-items')) $('technical-items').append(entry.row); technical++ }
+    else if (entry.row.parentElement !== list) list.append(entry.row)
+  }
+  $('technical-streams').hidden = technical === 0
+  $('technical-count').textContent = technical ? `· ${technical}` : ''
+  paintProgress()
 }
 
 function formatDuration(seconds) {
@@ -218,9 +343,9 @@ function renderExtract(result) {
     $('single-video').hidden = false
     $('empty').hidden = true
     $('playlist-empty-text').textContent = 'Найден один ролик. Он находится во вкладке «На текущей странице».'
-    $('single-video').append(
-      mediaCard({ ...result, name: result.title || result.url, kind: 'video' }, [button], status, 'div')
-    )
+    const item = { ...result, name: result.title || result.url, kind: 'video', page: true }
+    const row = mediaCard(item, [playButton(item, status), button], status, 'div')
+    $('single-video').append(row); watchInfo(row, item); paintProgress()
     updatePageCount()
     return
   }
@@ -252,19 +377,20 @@ function renderExtract(result) {
         refreshLabel()
       }
     })
-    list.append(
-      el('li', { className: 'entry' }, [
+    const row = el('li', { className: 'entry' }, [
         preview({ ...entry, kind: 'video' }),
         el('div', { className: 'entry-info' }, [
           el('div', { className: 'name', textContent: entry.title || entry.url, title: entry.title || entry.url }),
+          el('div', { className: 'media-meta muted', textContent: 'Качество и размер…' }),
           el('div', { className: 'entry-actions' }, [
             el('label', { className: 'check' }, [check, el('span', { className: 'chip-on', textContent: 'Выбрано' }), el('span', { className: 'chip-off', textContent: 'Выбрать' })]),
+            playButton({ ...entry, page: true }, status),
             button
           ])
         ]),
         status
       ])
-    )
+    list.append(row); watchInfo(row, { ...entry, page: true })
   }
 
   const selectedCount = () => checks.filter((item) => item.check.checked).length
@@ -326,8 +452,10 @@ function renderExtract(result) {
     ]),
     whole
   ]))
+  box.querySelector('.playlist-summary').dataset.mediaUrl = result.url
   box.append(summary, el('div', { className: 'selection-toolbar' }, [toggle, selectedLabel, sendSelected]), list)
   decorateToggles(box)
+  paintProgress()
   if (result.truncated) {
     box.append(el('p', { className: 'muted small', textContent: `Показаны первые ${entries.length} — для остальных отправьте весь плейлист.` }))
   }
@@ -368,7 +496,7 @@ async function checkRouter() {
     return
   }
   const result = await chrome.runtime.sendMessage({ type: 'health' })
-  status.textContent = result?.ok ? 'на связи' : result?.authRequired ? 'нужен вход' : 'нет связи'
+  status.textContent = result?.ok ? 'на связи' : result?.authRequired ? 'нужен вход' : result?.accessDenied ? 'нет доступа' : 'нет связи'
   status.className = `pill ${result?.ok ? 'ok' : result?.authRequired ? 'warn' : 'error'}`
   status.title = result?.error || normalizeRouterUrl(settings.routerUrl)
 }
@@ -376,6 +504,8 @@ async function checkRouter() {
 async function init() {
   hydrateIcons()
   decorateToggles()
+  $('extension-version').textContent = chrome.runtime.getManifest().version
+  $('open-filter').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('options.html#discovery-filter') }))
   $('open-ui').replaceChildren(icon('external'))
   $('open-options').replaceChildren(icon('settings'))
   $('rescan').replaceChildren(icon('refresh'))
@@ -415,6 +545,8 @@ async function init() {
   const tab = forced ? await chrome.tabs.get(forced) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
   const data = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id, pageUrl: tab?.url, title: tab?.title })
   let pageUrl = data?.pageUrl || tab?.url || ''
+  let mediaSourceUrl = data?.mediaSourceUrl || pageUrl
+  currentPageUrl = pageUrl
   $('page-title').textContent = data?.title || tab?.title || pageUrl
   $('page-title').title = pageUrl
   const pageStatus = el('div', { className: 'result' })
@@ -422,26 +554,26 @@ async function init() {
   const sendPage = $('send-page')
   if (!isHttp(pageUrl)) sendPage.disabled = true
   if (data?.videoHost) sendPage.classList.add('primary')
-  sendPage.addEventListener('click', () => send(pageUrl, 'YTDLP', pageStatus, sendPage))
+  sendPage.addEventListener('click', () => send(mediaSourceUrl, 'YTDLP', pageStatus, sendPage))
 
   const extractButton = $('extract')
   const canExtract = () => isHttp(pageUrl) && Boolean(normalizeRouterUrl(settings.routerUrl))
   extractButton.disabled = !canExtract()
   let extracted = false
   extractButton.addEventListener('click', () => {
-    void runExtract(tab?.id, pageUrl, extracted, true)
+    void runExtract(tab?.id, mediaSourceUrl, extracted, true)
     extracted = true
   })
   onPlaylistActivate = () => {
     if (!extracted && canExtract() && !extractButton.disabled) {
       extracted = true
-      void runExtract(tab?.id, pageUrl)
+      void runExtract(tab?.id, mediaSourceUrl)
     }
   }
   // Video sites are what yt-dlp is for: look right away (the worker caches the answer).
   if (canExtract() && data?.videoHost) {
     extracted = true
-    void runExtract(tab?.id, pageUrl)
+    void runExtract(tab?.id, mediaSourceUrl)
   }
 
   const quickStatus = el('div', { className: 'result' })
@@ -452,20 +584,25 @@ async function init() {
     if (url) void send(url, undefined, quickStatus, $('quick').querySelector('button'))
   })
 
-  renderItems(data?.items || [])
+  renderItems(data?.items || [], data?.hiddenCount || 0)
   void initDownloadPreferences(settings, () => {
-    if (!settings.videoMaxHeight && !settings.videoAudioOnly && settings.videoContainer === 'auto') return
+    infoGeneration++; infoQueue.length = 0
+    mediaOverrides.clear()
+    for (const row of document.querySelectorAll('[data-media-page]')) infoObserver.observe(row)
+    if (!Object.keys(videoOptions(settings)).length) return
     for (const entry of itemRows.values()) {
-      if (['video', 'audio', 'stream'].includes(entry.kind)) entry.select.value = 'YTDLP'
+      if (['video', 'audio', 'stream'].includes(entry.kind)) { entry.select.value = 'YTDLP'; entry.select.lmsSync?.() }
     }
   })
   let refreshTimer = 0
   const refresh = async () => {
     const latest = await chrome.runtime.sendMessage({ type: 'getTab', tabId: tab?.id })
     if (!latest) return
+    mediaSourceUrl = latest.mediaSourceUrl || latest.pageUrl || pageUrl
     if (latest.pageUrl && latest.pageUrl !== pageUrl) {
       extractGeneration++
       pageUrl = latest.pageUrl
+      currentPageUrl = pageUrl
       $('page-title').textContent = latest.title || pageUrl
       $('page-title').title = pageUrl
       $('ytdlp').hidden = true
@@ -482,9 +619,15 @@ async function init() {
       extractButton.disabled = !isHttp(pageUrl) || !normalizeRouterUrl(settings.routerUrl)
       sendPage.disabled = !isHttp(pageUrl)
     }
-    renderItems(latest.items || [])
+    renderItems(latest.items || [], latest.hiddenCount || 0)
   }
   chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === 'accountChanged') {
+      latestJobs = []; paintProgress(); infoCache.clear(); mediaOverrides.clear(); infoGeneration++; infoQueue.length = 0
+      $('ytdlp').replaceChildren(); $('single-video').replaceChildren(); extracted = false
+      void checkRouter(); void pollProgress(); return
+    }
+    if (message?.type === 'jobsChanged') { void pollProgress(); return }
     if (message?.type !== 'tabChanged' || message.tabId !== tab?.id || refreshTimer) return
     refreshTimer = setTimeout(() => { refreshTimer = 0; void refresh() }, 150)
   })
@@ -498,6 +641,7 @@ async function init() {
     await refresh()
   }
   void checkRouter()
+  decorateSelects(); void pollProgress()
 }
 
 void init()

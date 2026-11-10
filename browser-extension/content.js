@@ -118,7 +118,11 @@
     timer = 0
     const items = collect()
     if (!chrome.runtime?.id) return // extension was reloaded; this script is orphaned
-    chrome.runtime.sendMessage({ type: 'scan', pageUrl: location.href, title: document.title, items }).catch(() => {})
+    const selectedSource = document.querySelector('a.VideoViewer-SourcePathLink[href], a.VideoViewer-SourceIconLink[href]')?.href
+    const embeddedSource = [...document.querySelectorAll('iframe[src]')].map(frame => frame.src).find(url => /^https?:\/\/(?:www\.)?(?:vkvideo\.ru|vk\.com)\/video(?:_ext\.php|-?\d+_\d+)/.test(url))
+    const video = document.querySelector('video')
+    const context = video ? { thumbnail: video.poster || document.querySelector('meta[property="og:image"]')?.content || '', durationSeconds: video.duration, height: video.videoHeight } : null
+    chrome.runtime.sendMessage({ type: 'scan', pageUrl: location.href, mediaSourceUrl: selectedSource || embeddedSource || location.href, title: document.title, context, items }).catch(() => {})
   }
 
   function schedule(delay = 800) {

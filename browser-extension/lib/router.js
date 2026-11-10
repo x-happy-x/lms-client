@@ -12,12 +12,20 @@ export const DEFAULT_SETTINGS = {
   interceptMinMb: 20,
   interceptMagnets: true,
   sniffMedia: true,
+  discoveryIgnoredExtensions: ['mp3'],
+  discoveryMinMb: 1,
   maxSpeedBytes: 0,
   downloadNodeId: '',
   downloadPath: '',
   videoMaxHeight: 0,
   videoAudioOnly: false,
   videoContainer: 'auto',
+  videoAudioFormat: 'm4a',
+  videoMaxFps: 0,
+  videoStartSeconds: null,
+  videoEndSeconds: null,
+  videoForceKeyframes: false,
+  videoEmbedMetadata: false,
   notifications: true
 }
 
@@ -45,7 +53,8 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
   }
   if (!response.ok) {
     if (response.status === 401) await settings.onUnauthorized?.()
-    const error = new Error(body?.error || `HTTP ${response.status}`)
+    const message = body?.authRequired ? 'Войдите через Account в расширении LMS. Вход на сайте выполняется отдельно.' : body?.error || `HTTP ${response.status}`
+    const error = new Error(message)
     error.status = response.status
     throw error
   }
@@ -64,6 +73,18 @@ export function extractMedia(settings, url, fetchImpl) {
 export function listNodes(settings, fetchImpl) {
   return request(settings, '/nodes?enabled=true', {}, fetchImpl)
 }
+
+export function mediaInfo(settings, url, direct = false, fetchImpl) {
+  return request(settings, '/media/info', { method: 'POST', body: JSON.stringify({ url, direct, nodeId: settings.downloadNodeId || undefined, maxHeight: Number(settings.videoMaxHeight) || undefined, maxFps: Number(settings.videoMaxFps) || undefined }) }, fetchImpl)
+}
+
+export async function prepareMedia(settings, item, fetchImpl) {
+  const result = await request(settings, '/media/preview', { method: 'POST', body: JSON.stringify({ url: item.url, direct: !item.page, nodeId: settings.downloadNodeId || undefined, maxHeight: Number(item.maxHeight || settings.videoMaxHeight) || undefined, maxFps: Number(item.maxFps || settings.videoMaxFps) || undefined }) }, fetchImpl)
+  if (!/^\/api\/ui\/media\/stream\/[A-Za-z0-9_-]{43}$/.test(result.streamUrl || '')) throw new Error('Некорректный адрес потока LMS')
+  return { ...result, streamUrl: normalizeRouterUrl(settings.routerUrl) + result.streamUrl }
+}
+
+export function listJobs(settings, fetchImpl) { return request(settings, '/jobs', {}, fetchImpl) }
 
 export function storageTargets(settings, nodeId, fetchImpl) {
   return request(settings, `/nodes/${encodeURIComponent(nodeId)}/storage/targets`, {}, fetchImpl)
@@ -102,9 +123,10 @@ export async function sendToRouter(settings, url, { type, maxSpeedBytes, nodeId,
   const preflight = await request(settings, '/jobs/preflight', { method: 'POST', body: JSON.stringify({ url }) }, fetchImpl)
   const videoOptions = ytdlpOptions || savedVideoOptions(settings)
   const needsOptions = (type || suggestType(url)) === 'YTDLP' && Object.keys(videoOptions).length > 0
+  const needsAdvanced = ['audioFormat', 'maxFps', 'startSeconds', 'endSeconds', 'forceKeyframes', 'embedMetadata'].some(key => key in videoOptions)
   let candidates = preflight
   if (needsOptions) {
-    candidates = { ...preflight, nodes: (preflight.nodes || []).filter((node) => node.ytdlpOptionsSupported) }
+    candidates = { ...preflight, nodes: (preflight.nodes || []).filter((node) => node.ytdlpOptionsSupported && (!needsAdvanced || node.advancedOptionsSupported)) }
     const preferred = nodeId ?? settings.downloadNodeId
     if (!candidates.nodes.length || (preferred && !candidates.nodes.some((node) => node.nodeId === preferred))) {
       throw new Error('Для качества и плейлистов обновите lms-node и lms-client. Выбранная нода не сообщает поддержку параметров yt-dlp.')

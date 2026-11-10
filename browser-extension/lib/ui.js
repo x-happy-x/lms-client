@@ -1,4 +1,7 @@
 const ICON_PATHS = {
+  play: 'm8 4 13 8-13 8Z',
+  pause: 'M8 4v16 M16 4v16',
+  filter: 'M4 4h16l-6 7v7l-4 2v-9Z',
   user: 'M20 21v-2a7 7 0 0 0-14 0v2 M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   logout: 'M9 4H4v16h5 M13 7l5 5-5 5 M8 12h13',
   video: 'm9 7 8 5-8 5Z M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z',
@@ -40,5 +43,58 @@ export function icon(name) {
   path.setAttribute('d', ICON_PATHS[name] || ICON_PATHS.file)
   svg.append(path)
   return svg
+}
+
+// Keep the native select as the source of truth; the visible chip has a keyboard menu.
+export function decorateSelects(root = document) {
+  for (const select of root.querySelectorAll('select')) decorateSelect(select)
+}
+
+export function decorateSelect(select) {
+  if (select.dataset.decorated) return
+  select.dataset.decorated = 'true'
+  select.tabIndex = -1; select.setAttribute('aria-hidden', 'true')
+  const wrap = document.createElement('span'), button = document.createElement('button'), menu = document.createElement('span')
+  wrap.className = 'select-chip'
+  button.type = 'button'; button.className = 'select-label'; button.setAttribute('aria-haspopup', 'listbox'); button.setAttribute('aria-expanded', 'false')
+  menu.className = 'select-menu'; menu.role = 'listbox'; menu.hidden = true
+  select.before(wrap); wrap.append(select, button, menu); select.classList.add('native-select')
+  const close = () => { menu.hidden = true; button.setAttribute('aria-expanded', 'false'); menu.style.position = '' }
+  const sync = () => {
+    button.replaceChildren(document.createTextNode(select.selectedOptions[0]?.textContent || 'Выбрать'), icon('chevron'))
+    button.disabled = select.disabled
+    button.setAttribute('aria-label', `${select.getAttribute('aria-label') || select.title || select.closest('label')?.querySelector('span')?.textContent || 'Выбор'}: ${button.textContent}`)
+    if (!menu.hidden) close()
+  }
+  button.addEventListener('click', () => {
+    if (!menu.hidden) { close(); return }
+    document.dispatchEvent(new Event('lms-close-menus'))
+    menu.replaceChildren(...[...select.options].map(option => {
+      const item = document.createElement('button'); item.type = 'button'; item.role = 'option'; item.textContent = option.textContent
+      item.disabled = option.disabled; item.setAttribute('aria-selected', String(option.selected))
+      if (option.selected) item.append(icon('check'))
+      item.addEventListener('click', () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus() })
+      return item
+    }))
+    menu.hidden = false; button.setAttribute('aria-expanded', 'true')
+    const rect = button.getBoundingClientRect(), width = Math.min(Math.max(rect.width, 200), innerWidth - 20)
+    const below = innerHeight - rect.bottom - 12, above = rect.top - 12, up = below < 160 && above > below
+    Object.assign(menu.style, { position: 'fixed', width: `${width}px`, left: `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`, maxHeight: `${Math.max(80, Math.min(260, up ? above : below))}px`, top: up ? 'auto' : `${rect.bottom + 6}px`, bottom: up ? `${innerHeight - rect.top + 6}px` : 'auto' })
+    menu.querySelector('[aria-selected="true"]')?.focus()
+  })
+  wrap.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { close(); button.focus(); event.preventDefault() }
+    if (menu.hidden && ['ArrowDown', 'ArrowUp', ' '].includes(event.key)) { event.preventDefault(); button.click(); return }
+    if (!menu.hidden && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault(); const items = [...menu.querySelectorAll('button:not(:disabled)')], at = items.indexOf(document.activeElement)
+      items[event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+    }
+  })
+  document.addEventListener('lms-close-menus', close)
+  document.addEventListener('pointerdown', event => { if (!wrap.contains(event.target)) close() })
+  window.addEventListener('blur', close)
+  select.addEventListener('change', sync)
+  new MutationObserver(sync).observe(select, { childList: true, subtree: true, attributes: true })
+  select.lmsSync = sync; sync()
 }
 

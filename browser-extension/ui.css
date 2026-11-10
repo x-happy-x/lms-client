@@ -208,3 +208,63 @@ body.options h1 { display: flex; align-items: center; gap: 10px; font-size: 22px
 .kinds { display: flex; flex-wrap: wrap; gap: 8px; }
 .hint { margin: 0; font-size: 12px; }
 code { font-size: 12px; }
+.card-play { color: var(--accent); flex: none; }
+#filter-status { margin: 0 0 8px; font-size: 11px; }
+.player-page main { width: min(1180px, 100%); margin: 0 auto; padding: 24px; }
+.player-header { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; }
+.player-header .grow { min-width: 0; }
+.player-header h1 { margin: 4px 0 0; font-size: 20px; overflow-wrap: anywhere; }
+.player-header a { text-decoration: none; }
+.player-stage { aspect-ratio: 16 / 9; background: #090b10; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: grid; }
+.player-stage video { width: 100%; height: 100%; max-height: 75vh; object-fit: contain; }
+.player-toolbar { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+.player-toolbar .btn { display: inline-flex; align-items: center; gap: 8px; }
+.player-quality { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.player-quality[hidden], .player-header [hidden] { display: none; }
+@media (max-width: 600px) { .player-page main { padding: 14px; } .player-header { flex-wrap: wrap; } .player-header .grow { flex-basis: 75%; } .player-toolbar { flex-wrap: wrap; } .player-toolbar #player-status { flex-basis: 100%; order: 3; } }
+/* Compact labels open an accessible, floating choice list. */
+.select-chip { display: inline-flex; position: relative; min-width: 0; max-width: 100%; }
+.select-chip .native-select { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); pointer-events: none; opacity: 0; }
+.select-label { display: inline-flex; align-items: center; justify-content: space-between; gap: 7px; min-height: 30px; max-width: 100%; padding: 5px 10px; border: 1px solid transparent; border-radius: 20px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); color: var(--text); cursor: pointer; text-align: left; font-size: 11px; font-weight: 600; }
+.select-label > .ui-icon { width: 13px; height: 13px; color: var(--muted); transition: transform .18s ease; }
+.select-label[aria-expanded=true] { border-color: var(--accent); }
+.select-label[aria-expanded=true] > .ui-icon { transform: rotate(180deg); }
+.select-label:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.select-label:disabled { opacity: .45; cursor: default; }
+.select-menu { z-index: 100; display: flex; flex-direction: column; padding: 5px; overflow-y: auto; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); box-shadow: 0 12px 36px #0003, 0 2px 6px #0001; }
+.select-menu[hidden] { display: none; }
+.select-menu > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; border: none; border-radius: 8px; padding: 9px 10px; background: transparent; text-align: left; cursor: pointer; font-size: 12px; }
+.select-menu > button[aria-selected=true] { color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.select-menu > button:hover, .select-menu > button:focus-visible { outline: none; background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.field > .select-chip, .field > .select-chip > .select-label { width: 100%; }
+.advanced-options { margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.advanced-options > summary { padding: 11px; font-size: 12px; }
+.advanced-options .preferences-body { padding: 0 12px 12px; }
+.download-water { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; isolation: isolate; background: #07162570; color: white; }
+.water-fill { position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; height: var(--progress, 0%); background: linear-gradient(160deg, #28d6eca6, #1477e5dd); transition: height 1.1s cubic-bezier(.2,.6,.3,1); }
+.water-wave { position: absolute; width: 200%; height: 24px; left: 0; top: -23px; overflow: visible; }
+.water-wave path { fill: #3bccefc9; animation: water-flow 5s linear infinite; }
+.water-wave .wave-1 { fill: #6ae7f18a; animation-direction: reverse; animation-duration: 7s; transform: translateY(5px); }
+.water-percent { font-size: clamp(22px, 5vw, 34px); font-weight: 760; line-height: 1.1; letter-spacing: -1.4px; text-shadow: 0 2px 15px #04244380; font-variant-numeric: tabular-nums; }
+.water-caption { margin-top: 5px; max-width: 95%; font-size: 10px; font-weight: 600; text-shadow: 0 1px 5px #0008; }
+.download-water[data-state=PAUSED] .water-wave path, .download-water[data-state=DONE] .water-wave path { animation-play-state: paused; }
+.download-water[data-state=DONE] .water-fill { background: linear-gradient(160deg, #32d6ada6, #099477dd); }
+.download-water[data-state=ERROR] { background: #681d2b99; }
+.download-water[data-state=CANCELED] { background: #263043b3; }
+.download-water.indeterminate .water-fill { height: 12%; }
+@keyframes water-flow { from { translate: -25% 0; } to { translate: 0 0; } }
+.player-timeline { display: flex; gap: 12px; align-items: center; margin-top: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.player-timeline[hidden] { display: none; }
+.player-timeline input { flex: 1; min-width: 0; accent-color: var(--accent); padding: 0; cursor: pointer; }
+.player-stage video::-webkit-media-controls-timeline { display: none; }
+.player-stage video::-webkit-media-controls-current-time-display, .player-stage video::-webkit-media-controls-time-remaining-display { display: none; }
+@media (prefers-reduced-motion: reduce) { .water-wave path { animation: none; } .water-fill, .select-label > .ui-icon { transition: none; } }
+
+.preview:has(.download-water) > .duration { visibility: hidden; }
+.media-meta .select-label { min-height: 23px; padding: 3px 7px; font-size: 10px; color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.media-meta .select-label > .ui-icon { width: 11px; height: 11px; color: currentColor; }
+.technical-streams { border: 1px solid var(--border); border-radius: 12px; margin: 10px 0; }
+.technical-streams > summary { padding: 12px; }
+.technical-streams > .hint { padding: 0 12px; }
+.technical-streams > .items { margin: 0; padding: 0 8px 8px; }
+.download-water[data-state=ERROR] .water-wave path, .download-water[data-state=CANCELED] .water-wave path { animation-play-state: paused; }

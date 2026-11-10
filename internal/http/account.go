@@ -30,6 +30,7 @@ type accountPending struct {
 type accountAuth struct {
 	origin, public string
 	gatewayToken   string
+	previewToken   func(*http.Request) string
 	client         *http.Client
 	mu             sync.Mutex
 	pending        map[string]accountPending
@@ -156,6 +157,17 @@ func (a *accountAuth) wrap(next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if strings.HasPrefix(path, "/api/ui/media/stream/") && a.previewToken != nil {
+			token := a.previewToken(r)
+			if !accountTokenPattern.MatchString(token) {
+				authError(w, 401)
+				return
+			}
+			clone := r.Clone(r.Context())
+			clone.Header = r.Header.Clone()
+			clone.Header.Set("Authorization", "Bearer "+token)
+			r = clone
+		}
 		user, status := a.identity(r)
 		if status != 200 {
 			authError(w, status)
@@ -167,7 +179,7 @@ func (a *accountAuth) wrap(next http.Handler) http.Handler {
 			authError(w, 403)
 			return
 		}
-		readPost := r.Method == http.MethodPost && (path == "/api/ui/media/extract" || path == "/api/ui/jobs/preflight" || (strings.HasPrefix(path, "/api/ui/nodes/") && strings.HasSuffix(path, "/storage/estimate")))
+		readPost := r.Method == http.MethodPost && (path == "/api/ui/media/extract" || path == "/api/ui/media/info" || path == "/api/ui/media/preview" || path == "/api/ui/jobs/preflight" || (strings.HasPrefix(path, "/api/ui/nodes/") && strings.HasSuffix(path, "/storage/estimate")))
 		if mutating && !readPost && path != "/api/ui/auth/logout" {
 			if user.Role == "viewer" || ((strings.HasPrefix(path, "/api/ui/nodes") || strings.HasPrefix(path, "/api/ui/profiles")) && user.Role != "admin") {
 				authError(w, 403)
@@ -273,6 +285,13 @@ func (a *accountAuth) callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, pending.Return, 302)
 }
 func withAccount(mux *http.ServeMux, origin, public string, gatewayToken ...string) http.Handler {
+	key := ""
+	if len(gatewayToken) > 0 {
+		key = gatewayToken[0]
+	}
+	return withAccountStreams(mux, origin, public, key, nil)
+}
+func withAccountStreams(mux *http.ServeMux, origin, public, gatewayToken string, previewToken func(*http.Request) string) http.Handler {
 	if origin == "" {
 		mux.HandleFunc("/api/ui/auth/config", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]bool{"enabled": false}) })
 		return mux
@@ -292,9 +311,8 @@ func withAccount(mux *http.ServeMux, origin, public string, gatewayToken ...stri
 		}
 	}
 	a := &accountAuth{origin: origin, public: public, pending: make(map[string]accountPending), client: &http.Client{Timeout: 4 * time.Second, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}}
-	if len(gatewayToken) > 0 {
-		a.gatewayToken = gatewayToken[0]
-	}
+	a.gatewayToken = gatewayToken
+	a.previewToken = previewToken
 	mux.HandleFunc("/api/ui/auth/config", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(405)
