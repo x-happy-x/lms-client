@@ -54,13 +54,14 @@ type Handler struct {
 }
 
 type createJobRequest struct {
-	Type             string  `json:"type"`
-	URL              string  `json:"url"`
-	StoragePath      *string `json:"storagePath,omitempty"`
-	ProfileID        *string `json:"profileId,omitempty"`
-	NodeID           *string `json:"nodeId,omitempty"`
-	StartImmediately *bool   `json:"startImmediately,omitempty"`
-	MaxSpeedBytes    *int64  `json:"maxSpeedBytes,omitempty"`
+	YtdlpOptions     *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
+	Type             string               `json:"type"`
+	URL              string               `json:"url"`
+	StoragePath      *string              `json:"storagePath,omitempty"`
+	ProfileID        *string              `json:"profileId,omitempty"`
+	NodeID           *string              `json:"nodeId,omitempty"`
+	StartImmediately *bool                `json:"startImmediately,omitempty"`
+	MaxSpeedBytes    *int64               `json:"maxSpeedBytes,omitempty"`
 }
 
 type speedLimitRequest struct {
@@ -80,19 +81,20 @@ type jobPreflightNodeOptionResponse struct {
 }
 
 type jobPreflightNodeResponse struct {
-	NodeID             string                           `json:"nodeId"`
-	NodeName           string                           `json:"nodeName"`
-	Status             string                           `json:"status"`
-	StatusText         string                           `json:"statusText"`
-	PingMs             *int64                           `json:"pingMs,omitempty"`
-	URL                string                           `json:"url"`
-	SizeBytes          *int64                           `json:"sizeBytes,omitempty"`
-	SizeKnown          bool                             `json:"sizeKnown"`
-	RecommendedType    string                           `json:"recommendedType,omitempty"`
-	SupportedTypes     []string                         `json:"supportedTypes"`
-	Options            []jobPreflightNodeOptionResponse `json:"options"`
-	DefaultStoragePath string                           `json:"defaultStoragePath,omitempty"`
-	Error              *string                          `json:"error,omitempty"`
+	YtdlpOptionsSupported bool                             `json:"ytdlpOptionsSupported"`
+	NodeID                string                           `json:"nodeId"`
+	NodeName              string                           `json:"nodeName"`
+	Status                string                           `json:"status"`
+	StatusText            string                           `json:"statusText"`
+	PingMs                *int64                           `json:"pingMs,omitempty"`
+	URL                   string                           `json:"url"`
+	SizeBytes             *int64                           `json:"sizeBytes,omitempty"`
+	SizeKnown             bool                             `json:"sizeKnown"`
+	RecommendedType       string                           `json:"recommendedType,omitempty"`
+	SupportedTypes        []string                         `json:"supportedTypes"`
+	Options               []jobPreflightNodeOptionResponse `json:"options"`
+	DefaultStoragePath    string                           `json:"defaultStoragePath,omitempty"`
+	Error                 *string                          `json:"error,omitempty"`
 }
 
 type jobPreflightResponse struct {
@@ -142,27 +144,28 @@ type createProfileRequest struct {
 }
 
 type jobResponse struct {
-	ID              string   `json:"id"`
-	CreatedAt       string   `json:"createdAt"`
-	UpdatedAt       string   `json:"updatedAt"`
-	Type            string   `json:"type"`
-	URL             string   `json:"url"`
-	StoragePath     *string  `json:"storagePath,omitempty"`
-	ProfileID       *string  `json:"profileId,omitempty"`
-	NodeID          *string  `json:"nodeId,omitempty"`
-	Status          string   `json:"status"`
-	RemoteJobID     *string  `json:"remoteJobId,omitempty"`
-	Percent         *float64 `json:"percent,omitempty"`
-	TotalBytes      *int64   `json:"totalBytes,omitempty"`
-	SpeedBytes      *int64   `json:"speedBytes,omitempty"`
-	ETASeconds      *int64   `json:"etaSeconds,omitempty"`
-	Message         *string  `json:"message,omitempty"`
-	StartedAt       *string  `json:"startedAt,omitempty"`
-	FinishedAt      *string  `json:"finishedAt,omitempty"`
-	OutputPath      *string  `json:"outputPath,omitempty"`
-	OutputSizeBytes *int64   `json:"outputSizeBytes,omitempty"`
-	ErrorText       *string  `json:"errorText,omitempty"`
-	MaxSpeedBytes   *int64   `json:"maxSpeedBytes,omitempty"`
+	YtdlpOptions    *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
+	ID              string               `json:"id"`
+	CreatedAt       string               `json:"createdAt"`
+	UpdatedAt       string               `json:"updatedAt"`
+	Type            string               `json:"type"`
+	URL             string               `json:"url"`
+	StoragePath     *string              `json:"storagePath,omitempty"`
+	ProfileID       *string              `json:"profileId,omitempty"`
+	NodeID          *string              `json:"nodeId,omitempty"`
+	Status          string               `json:"status"`
+	RemoteJobID     *string              `json:"remoteJobId,omitempty"`
+	Percent         *float64             `json:"percent,omitempty"`
+	TotalBytes      *int64               `json:"totalBytes,omitempty"`
+	SpeedBytes      *int64               `json:"speedBytes,omitempty"`
+	ETASeconds      *int64               `json:"etaSeconds,omitempty"`
+	Message         *string              `json:"message,omitempty"`
+	StartedAt       *string              `json:"startedAt,omitempty"`
+	FinishedAt      *string              `json:"finishedAt,omitempty"`
+	OutputPath      *string              `json:"outputPath,omitempty"`
+	OutputSizeBytes *int64               `json:"outputSizeBytes,omitempty"`
+	ErrorText       *string              `json:"errorText,omitempty"`
+	MaxSpeedBytes   *int64               `json:"maxSpeedBytes,omitempty"`
 }
 
 type nodeResponse struct {
@@ -334,6 +337,7 @@ func (h *Handler) preflightJob(w http.ResponseWriter, r *http.Request) {
 				item.RecommendedType = resp.RecommendedType
 				item.SupportedTypes = resp.SupportedTypes
 				item.DefaultStoragePath = resp.DefaultStoragePath
+				item.YtdlpOptionsSupported = resp.YtdlpOptionsSupported
 				for _, option := range resp.Options {
 					item.Options = append(item.Options, jobPreflightNodeOptionResponse{
 						Type:              option.Type,
@@ -573,6 +577,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		h.badRequest(w, err.Error())
 		return
 	}
+	if err := req.YtdlpOptions.Validate(domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type)))); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
 
 	now := time.Now().UTC()
 	status := domain.JobStatusQueued
@@ -590,6 +598,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		NodeID:        req.NodeID,
 		Status:        status,
 		MaxSpeedBytes: maxSpeed,
+		YtdlpOptions:  req.YtdlpOptions,
 	}
 
 	if err := h.jobRepo.Create(r.Context(), job); err != nil {
@@ -1207,6 +1216,7 @@ func toJobResponse(j domain.Job) jobResponse {
 		OutputPath:      j.OutputPath,
 		OutputSizeBytes: j.OutputSizeBytes,
 		MaxSpeedBytes:   j.MaxSpeedBytes,
+		YtdlpOptions:    j.YtdlpOptions,
 		ErrorText:       j.ErrorText,
 	}
 }

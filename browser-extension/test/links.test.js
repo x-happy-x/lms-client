@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { downloadKind, shouldIntercept, sniffKind, sniffCandidate } from '../lib/intercept.js'
 import { displayName, isDownloadable, kindFromContentType, kindOf, normalizeCandidates, normalizeRouterUrl, suggestType } from '../lib/links.js'
 import { DEFAULT_SETTINGS, authHeaders, extractMedia, planJob, sendToRouter } from '../lib/router.js'
+import { videoOptions } from '../lib/preferences.js'
 
 test('kinds and job types', () => {
   assert.equal(kindOf('https://x.ru/a/Movie.MKV?x=1'), 'video')
@@ -185,4 +186,41 @@ test('extractMedia posts the page to the router', async () => {
   assert.equal(result.entries[0].url, 'https://x.ru/a')
   assert.equal(calls[0].url, 'http://192.168.1.1:8082/api/ui/media/extract')
   assert.deepEqual(JSON.parse(calls[0].init.body), { url: 'https://x.ru/list' })
+})
+
+test('playlist, quality and destination are sent to the requested capable node', async () => {
+  const calls = []
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init })
+    const response = url.endsWith('/preflight') ? {
+      ...preflight,
+      nodes: preflight.nodes.map((node) => ({ ...node, ytdlpOptionsSupported: node.nodeId === 'n3' }))
+    } : { id: 'playlist' }
+    return { ok: true, text: async () => JSON.stringify(response) }
+  }
+  const preferences = { ...settings, downloadNodeId: 'n3', downloadPath: ' courses/2026 ', videoMaxHeight: 1080, videoContainer: 'mp4' }
+  await sendToRouter(preferences, 'https://youtube.com/playlist?list=abc', {
+    type: 'YTDLP', ytdlpOptions: videoOptions(preferences, true)
+  }, fakeFetch)
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    type: 'YTDLP', url: 'https://youtube.com/playlist?list=abc', nodeId: 'n3',
+    storagePath: 'courses/2026', startImmediately: true,
+    ytdlpOptions: { maxHeight: 1080, container: 'mp4', playlist: true }
+  })
+  assert.deepEqual(videoOptions({ ...preferences, videoAudioOnly: true }, false), { audioOnly: true, playlist: false })
+})
+
+test('an unavailable chosen node never silently falls back to another node', () => {
+  assert.throws(() => planJob(preflight, 'https://x.ru/a.mp4', 'DIRECT', 'n1'), /нода недоступна/)
+  assert.throws(() => planJob(preflight, 'https://youtube.com/v', 'YTDLP', 'n2'), /не поддерживает/)
+})
+
+test('old nodes cannot silently ignore selected quality', async () => {
+  let jobs = 0
+  const fakeFetch = async (url) => {
+    if (!url.endsWith('/preflight')) jobs++
+    return { ok: true, text: async () => JSON.stringify(preflight) }
+  }
+  await assert.rejects(sendToRouter({ ...settings, videoMaxHeight: 720 }, 'https://youtube.com/v', { type: 'YTDLP' }, fakeFetch), /обновите lms-node/)
+  assert.equal(jobs, 0)
 })

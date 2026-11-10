@@ -1,8 +1,8 @@
 // Service worker: settings, per-tab findings, context menus, download interception,
 // media sniffing and sending links to the LMS router.
 import { shouldIntercept, downloadKind, sniffCandidate } from './lib/intercept.js'
-import { displayName, isHttp, isMagnet, isVideoHost, normalizeCandidates, normalizeRouterUrl } from './lib/links.js'
-import { DEFAULT_SETTINGS, extractMedia, health, sendToRouter } from './lib/router.js'
+import { displayName, isHttp, isMagnet, isVideoHost, kindOf, normalizeCandidates, normalizeRouterUrl } from './lib/links.js'
+import { DEFAULT_SETTINGS, extractMedia, health, listNodes, storageTargets, sendToRouter } from './lib/router.js'
 
 const TYPE_LABEL = { DIRECT: 'HTTP', YTDLP: 'yt-dlp', ARIA2C: 'aria2c', TORRENT: 'торрент' }
 const SNIFF_LIMIT = 60
@@ -92,12 +92,15 @@ chrome.notifications.onButtonClicked.addListener(async (id) => {
   chrome.notifications.clear(id)
 })
 
-async function sendUrl(url, { type, maxSpeedBytes, fallbackDownload = false, quiet = false } = {}) {
+async function sendUrl(url, { type, maxSpeedBytes, nodeId, storagePath, ytdlpOptions, fallbackDownload = false, quiet = false } = {}) {
   await ready
   url = (url || '').trim()
   if (!isMagnet(url) && !isHttp(url)) throw new Error('Нужна http(s)- или magnet-ссылка')
+  if (!type && (settings.videoMaxHeight || settings.videoAudioOnly || settings.videoContainer !== 'auto') && ['video', 'audio', 'stream'].includes(kindOf(url))) {
+    type = 'YTDLP'
+  }
   try {
-    const { job, plan } = await sendToRouter(settings, url, { type, maxSpeedBytes })
+    const { job, plan } = await sendToRouter(settings, url, { type, maxSpeedBytes, nodeId, storagePath, ytdlpOptions })
     if (!quiet) {
       notify(
         'Отправлено в LMS',
@@ -178,7 +181,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'lms-selection') void sendUrl(firstLink(info.selectionText))
   if (info.menuItemId === 'lms-media') {
     // MSE players expose blob: sources; the page itself is what yt-dlp can resolve.
-    if (isHttp(info.srcUrl)) void sendUrl(info.srcUrl)
+    if (isHttp(info.srcUrl)) void sendUrl(info.srcUrl, { type: 'YTDLP' })
     else void sendUrl(page, { type: 'YTDLP' })
   }
 })
@@ -210,7 +213,13 @@ async function onMessage(message, sender) {
       return null
     }
     case 'send':
-      return sendUrl(message.url, { type: message.linkType, maxSpeedBytes: message.maxSpeedBytes, quiet: message.quiet })
+      return sendUrl(message.url, { type: message.linkType, maxSpeedBytes: message.maxSpeedBytes, nodeId: message.nodeId, storagePath: message.storagePath, ytdlpOptions: message.ytdlpOptions, quiet: message.quiet })
+    case 'destinations':
+      await ready
+      return { ok: true, nodes: await listNodes(settings) }
+    case 'storageTargets':
+      await ready
+      return { ok: true, result: await storageTargets(settings, message.nodeId) }
     case 'getTab': {
       const state = await tabState(message.tabId)
       const pageUrl = state.pageUrl || message.pageUrl || ''
@@ -224,10 +233,10 @@ async function onMessage(message, sender) {
       await ready
       const key = `extract:${message.tabId}`
       const cached = (await chrome.storage.session.get(key))[key]
-      if (!message.force && cached?.url === message.url) return { ok: true, result: cached.result }
+      if (!message.force && cached?.url === message.url && cached.nodeId === settings.downloadNodeId) return { ok: true, result: cached.result }
       try {
         const result = await extractMedia(settings, message.url)
-        chrome.storage.session.set({ [key]: { url: message.url, result } }).catch(() => {})
+        chrome.storage.session.set({ [key]: { url: message.url, nodeId: settings.downloadNodeId, result } }).catch(() => {})
         return { ok: true, result }
       } catch (error) {
         return { ok: false, error: error.message }

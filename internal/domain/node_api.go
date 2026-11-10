@@ -7,11 +7,12 @@ import (
 )
 
 type NodeJobCreateRequest struct {
-	Type             string  `json:"type"`
-	URL              string  `json:"url"`
-	StoragePath      *string `json:"storagePath,omitempty"`
-	StartImmediately *bool   `json:"startImmediately,omitempty"`
-	MaxSpeedBytes    *int64  `json:"maxSpeedBytes,omitempty"`
+	YtdlpOptions     *YtDlpOptions `json:"ytdlpOptions,omitempty"`
+	Type             string        `json:"type"`
+	URL              string        `json:"url"`
+	StoragePath      *string       `json:"storagePath,omitempty"`
+	StartImmediately *bool         `json:"startImmediately,omitempty"`
+	MaxSpeedBytes    *int64        `json:"maxSpeedBytes,omitempty"`
 }
 
 type NodeJobCreateResponse struct {
@@ -67,13 +68,14 @@ type NodeDownloadOption struct {
 }
 
 type NodeJobPreflightResponse struct {
-	URL                string               `json:"url"`
-	SizeBytes          *int64               `json:"sizeBytes"`
-	SizeKnown          bool                 `json:"sizeKnown"`
-	RecommendedType    string               `json:"recommendedType"`
-	SupportedTypes     []string             `json:"supportedTypes"`
-	Options            []NodeDownloadOption `json:"options"`
-	DefaultStoragePath string               `json:"defaultStoragePath"`
+	YtdlpOptionsSupported bool                 `json:"ytdlpOptionsSupported"`
+	URL                   string               `json:"url"`
+	SizeBytes             *int64               `json:"sizeBytes"`
+	SizeKnown             bool                 `json:"sizeKnown"`
+	RecommendedType       string               `json:"recommendedType"`
+	SupportedTypes        []string             `json:"supportedTypes"`
+	Options               []NodeDownloadOption `json:"options"`
+	DefaultStoragePath    string               `json:"defaultStoragePath"`
 }
 
 // NodeMediaExtractResponse is what yt-dlp found at a URL on the node (POST /api/jobs/extract):

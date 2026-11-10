@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -32,7 +32,7 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 		name := entry.Name()
-		if filepath.Ext(name) != ".sql" {
+		if path.Ext(name) != ".sql" {
 			continue
 		}
 		parts := strings.SplitN(name, "_", 2)
@@ -43,7 +43,7 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 		migrations = append(migrations, migration{
 			version: version,
 			name:    name,
-			path:    filepath.Join("migration", name),
+			path:    path.Join("migration", name),
 		})
 	}
 
