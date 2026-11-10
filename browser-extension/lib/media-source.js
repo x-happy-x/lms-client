@@ -12,7 +12,7 @@ export function canonicalVideoPage(raw) {
   return ''
 }
 export function isVkMedia(raw) {
-  try { const host = new URL(raw).hostname; return host.endsWith('.vkuser.net') || host.endsWith('.vkuser.ru') || host.endsWith('.userapi.com') }
+  try { const host = new URL(raw).hostname; return host.endsWith('.vkuser.net') || host.endsWith('.vkuser.ru') || host.endsWith('.userapi.com') || (host.startsWith('vk') && host.endsWith('.okcdn.ru')) }
   catch { return false }
 }
 export function dedupeVkMedia(items) {
