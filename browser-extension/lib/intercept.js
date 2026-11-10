@@ -40,20 +40,48 @@ export function shouldIntercept(settings, item, routerBase, selfId) {
   return size < 0 || size >= min
 }
 
-const SEGMENT_EXT = new Set(['ts', 'm4s', 'vtt', 'key'])
+const SEGMENT_EXT = new Set(['ts', 'm4s', 'cmfv', 'cmfa', 'vtt', 'key'])
+
+export function isMediaSegment(url) {
+  try {
+    const parsed = new URL(url)
+    return SEGMENT_EXT.has(extensionOf(url)) ||
+      /(?:^|[/_.-])(?:init|segment|seg|chunk|fragment)[-_.\d/]/i.test(parsed.pathname) ||
+      ['range', 'bytestart', 'byteend'].some((key) => parsed.searchParams.has(key))
+  } catch {
+    return false
+  }
+}
 
 /**
  * Kind of a network response worth listing for the tab, or ''. Streams (HLS/DASH manifests)
- * and torrents are kept from any request type; plain video/audio only from media elements —
- * XHR video is almost always MSE segments that cannot be downloaded on their own.
+ * and torrents are kept from any request type. Players also fetch complete media with
+ * XHR/fetch; exclude recognizable MSE fragments, but keep HTTP Range responses whose
+ * URL still addresses the full file.
  */
 export function sniffKind(url, contentType, requestType) {
   if (!isHttp(url)) return ''
-  const ext = extensionOf(url)
   const byType = kindFromContentType(contentType)
   const byExt = kindOf(url)
   if (byType === 'stream' || byExt === 'stream') return 'stream'
   if (byType === 'torrent' || byExt === 'torrent') return 'torrent'
-  if ((byType === 'video' || byType === 'audio') && requestType === 'media' && !SEGMENT_EXT.has(ext)) return byType
+  if (isMediaSegment(url)) return ''
+  const kind = byType || byExt
+  if ((kind === 'video' || kind === 'audio') && ['media', 'xmlhttprequest', 'other'].includes(requestType)) return kind
   return ''
+}
+
+/** Preserve MIME classification for extensionless manifests and the full Range size. */
+export function sniffCandidate(details) {
+  if (details.statusCode && (details.statusCode < 200 || details.statusCode >= 300)) return null
+  const header = (name) => (details.responseHeaders || []).find((h) => h.name.toLowerCase() === name)?.value || ''
+  const contentType = header('content-type')
+  const kind = sniffKind(details.url, contentType, details.type)
+  if (!kind) return null
+  const total = /\/(\d+)$/.exec(header('content-range'))?.[1]
+  const size = Number(total || (details.statusCode !== 206 ? header('content-length') : 0))
+  return {
+    url: details.url, source: kind, kind, contentType,
+    ...(size > 0 && Number.isFinite(size) && kind !== 'stream' ? { sizeBytes: size } : {})
+  }
 }

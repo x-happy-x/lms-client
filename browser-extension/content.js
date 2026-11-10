@@ -7,12 +7,20 @@
   const MAGNET = /^magnet:\?/i
   let magnetIntercept = true
   let timer = 0
+  let sniffMedia = true
+  let resourcePage = location.href
+  const resources = new Map()
 
-  chrome.storage.sync.get({ interceptMagnets: true }, (value) => {
+  chrome.storage.sync.get({ interceptMagnets: true, sniffMedia: true }, (value) => {
     magnetIntercept = value.interceptMagnets !== false
+    sniffMedia = value.sniffMedia !== false
   })
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && changes.interceptMagnets) magnetIntercept = changes.interceptMagnets.newValue !== false
+    if (area === 'sync' && changes.sniffMedia) {
+      sniffMedia = changes.sniffMedia.newValue !== false
+      schedule(0)
+    }
   })
 
   const PAGE_EXT = new Set(['html', 'htm', 'php', 'asp', 'aspx', 'jsp', 'shtml', 'cgi', 'js', 'css', 'json', 'xml', 'svg', 'ico'])
@@ -35,27 +43,76 @@
 
   function collect() {
     const items = []
-    const push = (url, source, name) => {
-      if (url && !/^(blob|data|javascript):/i.test(url)) items.push({ url, source, name: name || '' })
+    const push = (url, source, name, metadata = {}) => {
+      if (!url || /^(blob|data|javascript):/i.test(url)) return
+      try { url = new URL(url, document.baseURI).href } catch { return }
+      items.push({ url, source, name: name || '', ...metadata })
     }
-    for (const media of document.querySelectorAll('video, audio')) {
-      const source = media.tagName === 'VIDEO' ? 'video' : 'audio'
-      const name = media.getAttribute('title') || ''
-      push(media.currentSrc || media.src, source, name)
-      for (const child of media.querySelectorAll('source[src]')) push(child.src, source, name)
+    // Open shadow roots are common in custom video player components.
+    const roots = [document]
+    for (const root of roots) {
+      for (const element of root.querySelectorAll('*')) {
+        if (element.shadowRoot) {
+          roots.push(element.shadowRoot)
+          observe(element.shadowRoot)
+        }
+      }
     }
-    for (const link of document.querySelectorAll('a[href]')) {
-      const href = link.getAttribute('href') || ''
-      if (MAGNET.test(href)) push(href, 'magnet', '')
-      else if (link.hasAttribute('download')) push(link.href, 'download-attr', link.getAttribute('download') || text(link))
-      else if (looksLikeFile(link.href)) push(link.href, 'link', '')
+    for (const root of roots) {
+      for (const media of root.querySelectorAll('video, audio')) {
+        const source = media.tagName === 'VIDEO' ? 'video' : 'audio'
+        const name = media.getAttribute('title') || media.getAttribute('aria-label') || ''
+        const metadata = {
+          thumbnail: media.poster || '', durationSeconds: media.duration,
+          width: media.videoWidth, height: media.videoHeight
+        }
+        push(media.currentSrc || media.getAttribute('src') || media.getAttribute('data-src'), source, name, metadata)
+        for (const child of media.querySelectorAll('source[src], source[data-src]')) {
+          push(child.getAttribute('src') || child.getAttribute('data-src'), source, name, metadata)
+        }
+      }
+      for (const link of root.querySelectorAll('a[href]')) {
+        const href = link.getAttribute('href') || ''
+        if (MAGNET.test(href)) push(href, 'magnet', '')
+        else if (link.hasAttribute('download')) push(link.href, 'download-attr', link.getAttribute('download') || text(link))
+        else if (looksLikeFile(link.href)) push(link.href, 'link', '')
+      }
     }
-    for (const meta of document.querySelectorAll('meta[property^="og:video"], meta[name^="twitter:player:stream"]')) {
+    const poster = document.querySelector('meta[property="og:image"]')?.content || ''
+    for (const meta of document.querySelectorAll('meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"], meta[name="twitter:player:stream"]')) {
       const content = meta.getAttribute('content') || ''
-      if (/^https?:/i.test(content)) push(content, 'video', document.title)
+      push(content, 'video', document.title, { thumbnail: poster })
     }
+    if (resourcePage !== location.href) {
+      resources.clear()
+      resourcePage = location.href
+    }
+    if (sniffMedia) items.push(...resources.values())
     return items
   }
+
+  function recordResources(entries) {
+    if (resourcePage !== location.href) {
+      resources.clear()
+      resourcePage = location.href
+    }
+    for (const entry of entries) {
+      // Resource Timing recovers media loaded before the worker/content scan started.
+      // MIME-only URLs are handled by webRequest; don't mistake MSE chunks for files.
+      let path
+      try { path = new URL(entry.name).pathname } catch { continue }
+      if (!/\.(?:mp4|webm|m4v|mov|mp3|m4a|ogg|m3u8|mpd)$/i.test(path)) continue
+      if (/(?:^|[/_.-])(?:init|segment|seg|chunk|fragment)[-_.\d/]/i.test(path)) continue
+      if (/[?&](?:range|bytestart|byteend)=/i.test(entry.name)) continue
+      resources.set(entry.name, { url: entry.name, source: 'resource' })
+      if (resources.size > 60) resources.delete(resources.keys().next().value)
+    }
+    schedule(300)
+  }
+
+  try {
+    new PerformanceObserver((list) => recordResources(list.getEntries())).observe({ type: 'resource', buffered: true })
+  } catch { /* Resource Timing is unavailable in some frames. */ }
 
   function report() {
     timer = 0
@@ -68,15 +125,26 @@
     if (!timer) timer = setTimeout(report, delay)
   }
 
-  new MutationObserver(() => schedule(1500)).observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['src', 'href']
-  })
+  const observed = new WeakSet()
+  function observe(root) {
+    if (observed.has(root)) return
+    observed.add(root)
+    new MutationObserver(() => schedule(800)).observe(root, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ['src', 'href', 'data-src', 'poster', 'content', 'title']
+    })
+    root.addEventListener('loadedmetadata', () => schedule(100), true)
+    root.addEventListener('play', () => schedule(100), true)
+  }
+  observe(document.documentElement)
   // Players often set the source only on play.
   document.addEventListener('play', () => schedule(300), true)
   document.addEventListener('loadedmetadata', () => schedule(300), true)
+  window.addEventListener('popstate', () => schedule(100))
+  window.addEventListener('hashchange', () => schedule(100))
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === 'rescan') report()
+  })
 
   function onMagnetClick(event) {
     if (!magnetIntercept || event.defaultPrevented) return

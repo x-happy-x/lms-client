@@ -1,6 +1,6 @@
 // Service worker: settings, per-tab findings, context menus, download interception,
 // media sniffing and sending links to the LMS router.
-import { shouldIntercept, downloadKind, sniffKind } from './lib/intercept.js'
+import { shouldIntercept, downloadKind, sniffCandidate } from './lib/intercept.js'
 import { displayName, isHttp, isMagnet, isVideoHost, normalizeCandidates, normalizeRouterUrl } from './lib/links.js'
 import { DEFAULT_SETTINGS, extractMedia, health, sendToRouter } from './lib/router.js'
 
@@ -46,6 +46,7 @@ function touch(tabId) {
     }, 400)
   }
   updateBadge(tabId)
+  chrome.runtime.sendMessage({ type: 'tabChanged', tabId }).catch(() => {})
 }
 
 function itemsOf(state) {
@@ -65,8 +66,8 @@ function resetTab(tabId, pageUrl = '') {
   touch(tabId)
 }
 
-chrome.tabs.onUpdated.addListener((tabId, change) => {
-  if (change.status === 'loading' && change.url) resetTab(tabId, change.url)
+chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
+  if (change.status === 'loading' || change.url) resetTab(tabId, change.url || tab?.url || '')
 })
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabs.delete(tabId)
@@ -139,12 +140,12 @@ chrome.downloads.onCreated.addListener(async (item) => {
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (!settings.sniffMedia || details.tabId < 0) return
-    const header = (details.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-type')
-    const kind = sniffKind(details.url, header?.value, details.type)
-    if (!kind) return
+    const candidate = sniffCandidate(details)
+    if (!candidate) return
     tabState(details.tabId).then((state) => {
-      if (state.sniffed.some((item) => item.url === details.url)) return
-      state.sniffed.push({ url: details.url, source: kind === 'audio' ? 'audio' : 'video', name: '' })
+      const existing = state.sniffed.find((item) => item.url === details.url)
+      if (existing) Object.assign(existing, candidate)
+      else state.sniffed.push(candidate)
       if (state.sniffed.length > SNIFF_LIMIT) state.sniffed.shift()
       touch(details.tabId)
     })
@@ -197,8 +198,9 @@ async function onMessage(message, sender) {
       if (tabId == null) return null
       const state = await tabState(tabId)
       if (sender.frameId === 0) {
-        if (state.pageUrl && state.pageUrl !== message.pageUrl && new URL(state.pageUrl).pathname !== new URL(message.pageUrl).pathname) {
-          state.sniffed = [] // SPA navigation to another page
+        if (state.pageUrl && state.pageUrl !== message.pageUrl) {
+          state.sniffed = []
+          state.frames = {} // SPA navigation, including query/hash routes
         }
         state.pageUrl = message.pageUrl
         state.title = message.title
@@ -214,6 +216,9 @@ async function onMessage(message, sender) {
       const pageUrl = state.pageUrl || message.pageUrl || ''
       return { pageUrl, title: state.title || message.title || '', videoHost: isVideoHost(pageUrl), items: itemsOf({ ...state, pageUrl }) }
     }
+    case 'rescan':
+      await chrome.tabs.sendMessage(message.tabId, { type: 'rescan' }).catch(() => {})
+      return { ok: true }
     case 'extract': {
       // Cached per tab and page so reopening the popup does not rerun yt-dlp.
       await ready

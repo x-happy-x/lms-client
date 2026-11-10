@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { downloadKind, shouldIntercept, sniffKind } from '../lib/intercept.js'
+import { downloadKind, shouldIntercept, sniffKind, sniffCandidate } from '../lib/intercept.js'
 import { displayName, isDownloadable, kindFromContentType, kindOf, normalizeCandidates, normalizeRouterUrl, suggestType } from '../lib/links.js'
 import { DEFAULT_SETTINGS, authHeaders, extractMedia, planJob, sendToRouter } from '../lib/router.js'
 
@@ -81,8 +81,51 @@ test('network sniffing keeps streams and media elements, not MSE segments', () =
   assert.equal(sniffKind('https://cdn.x.ru/manifest', 'application/dash+xml', 'xmlhttprequest'), 'stream')
   assert.equal(sniffKind('https://cdn.x.ru/v.mp4', 'video/mp4', 'media'), 'video')
   assert.equal(sniffKind('https://cdn.x.ru/seg1.ts', 'video/mp2t', 'media'), '')
-  assert.equal(sniffKind('https://cdn.x.ru/range', 'video/mp4', 'xmlhttprequest'), '')
+  assert.equal(sniffKind('https://cdn.x.ru/video', 'video/mp4', 'xmlhttprequest'), 'video')
+  assert.equal(sniffKind('https://cdn.x.ru/clip.webm', 'application/octet-stream', 'xmlhttprequest'), 'video')
+  assert.equal(sniffKind('https://cdn.x.ru/segment-1.mp4', 'video/mp4', 'xmlhttprequest'), '')
+  assert.equal(sniffKind('https://cdn.x.ru/v.mp4?range=0-999', 'video/mp4', 'xmlhttprequest'), '')
+  assert.equal(sniffKind('https://cdn.x.ru/v.m4s', 'video/mp4', 'media'), '')
   assert.equal(sniffKind('https://x.ru/app.js', 'text/javascript', 'other'), '')
+})
+
+test('extensionless manifests keep their stream type and select yt-dlp', () => {
+  const candidate = sniffCandidate({
+    url: 'https://cdn.x.ru/manifest?token=secret', type: 'xmlhttprequest', statusCode: 200,
+    responseHeaders: [{ name: 'Content-Type', value: 'application/dash+xml' }, { name: 'Content-Length', value: '1234' }]
+  })
+  const [item] = normalizeCandidates([candidate], 'https://x.ru')
+  assert.equal(item.kind, 'stream')
+  assert.equal(item.sizeBytes, undefined, 'manifest size is not video size')
+  assert.equal(item.url, candidate.url, 'signed query is preserved')
+})
+
+test('Range responses report the total file size and failed requests are excluded', () => {
+  const details = {
+    url: 'https://cdn.x.ru/v.mp4', type: 'xmlhttprequest', statusCode: 206,
+    responseHeaders: [
+      { name: 'content-type', value: 'video/mp4' },
+      { name: 'content-range', value: 'bytes 0-999/1200000' },
+      { name: 'content-length', value: '1000' }
+    ]
+  }
+  assert.equal(sniffCandidate(details).sizeBytes, 1200000)
+  assert.equal(sniffCandidate({ ...details, responseHeaders: details.responseHeaders.filter((h) => h.name !== 'content-range') }).sizeBytes, undefined)
+  assert.equal(sniffCandidate({ ...details, statusCode: 403 }), null)
+})
+
+test('DOM and network metadata merge into one video without losing poster or duration', () => {
+  const url = 'https://cdn.x.ru/a.mp4'
+  const [item] = normalizeCandidates([
+    { url, source: 'link' },
+    { url, source: 'video', name: 'Урок', thumbnail: '/poster.jpg', durationSeconds: 65, width: 1920, height: 1080 },
+    { url, source: 'video', sizeBytes: 123456, durationSeconds: Infinity, thumbnail: 'javascript:alert(1)' }
+  ], 'https://x.ru/page')
+  assert.equal(item.name, 'Урок')
+  assert.equal(item.thumbnail, 'https://x.ru/poster.jpg')
+  assert.equal(item.durationSeconds, 65)
+  assert.equal(item.height, 1080)
+  assert.equal(item.sizeBytes, 123456)
 })
 
 const preflight = {
