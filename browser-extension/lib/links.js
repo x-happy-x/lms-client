@@ -131,8 +131,10 @@ export function normalizeCandidates(candidates, baseUrl) {
     const keep = kind === 'magnet' || DOWNLOADABLE.has(kind) || candidate.source === 'download-attr'
     if (!keep) continue
     const item = seen.get(url) || { url, kind: kind || 'file', name: displayName(url), source: candidate.source }
-    if (kind === 'stream') item.kind = kind
+    if (kind === 'stream' || kindFromContentType(candidate.contentType)) item.kind = kind
     if (candidate.name) item.name = String(candidate.name).slice(0, 200)
+    if (Number.isInteger(candidate.frameId) && candidate.frameId >= 0) item.frameId = candidate.frameId
+    if (typeof candidate.playerId === 'string') item.playerId = candidate.playerId.slice(0, 100)
     for (const key of ['durationSeconds', 'width', 'height', 'sizeBytes']) {
       if (Number.isFinite(candidate[key]) && candidate[key] > 0) item[key] = candidate[key]
     }

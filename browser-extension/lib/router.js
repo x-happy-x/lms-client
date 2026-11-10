@@ -1,6 +1,7 @@
 // Router (lms-client /api/ui) client used by the service worker and popup.
 import { normalizeRouterUrl, suggestType } from './links.js'
 import { videoOptions as savedVideoOptions } from './preferences.js'
+import { sourceFailure } from './source-error.js'
 
 export const DEFAULT_SETTINGS = {
   routerUrl: '',
@@ -54,7 +55,9 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
   if (!response.ok) {
     if (response.status === 401) await settings.onUnauthorized?.()
     const message = body?.authRequired ? 'Войдите через Account в расширении LMS. Вход на сайте выполняется отдельно.' : body?.error || `HTTP ${response.status}`
-    const error = new Error(message)
+    const sourceError = path.startsWith('/media/') && ![401, 403].includes(response.status) ? sourceFailure(message) : null
+    const error = new Error(sourceError?.message || message)
+    if (sourceError) error.code = sourceError.code
     error.status = response.status
     throw error
   }

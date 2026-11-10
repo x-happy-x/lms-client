@@ -5,6 +5,7 @@ import { displayName, isHttp, isMagnet, isVideoHost, kindOf, normalizeCandidates
 import { DEFAULT_SETTINGS, extractMedia, health, listNodes, storageTargets, sendToRouter, mediaInfo, prepareMedia, listJobs } from './lib/router.js'
 import { videoOptions } from './lib/preferences.js'
 import { canonicalVideoPage, dedupeVkMedia, isVkMedia } from './lib/media-source.js'
+import { normalizePlayers, groupPlayerSources } from './lib/player-groups.js'
 import { routerSettings, loginAccount, logoutAccount, statusAccount } from './lib/account.js'
 import { filterDiscoveries } from './lib/discovery-filter.js'
 import { openPreview, forgetPreview } from './lib/preview.js'
@@ -68,15 +69,17 @@ function itemsOf(state) {
 }
 
 function findingsOf(state) {
-  const all = dedupeVkMedia(normalizeCandidates([...Object.values(state.frames).flat(), ...state.sniffed], state.pageUrl))
+  const candidates = [...Object.entries(state.frames).flatMap(([frameId, items]) => items.map(item => ({ ...item, frameId: Number(frameId) }))), ...state.sniffed]
+  const all = dedupeVkMedia(normalizeCandidates(candidates, state.pageUrl))
+  const grouped = groupPlayerSources(all, state.players)
   const sources = Object.values(state.sources || {}).filter(Boolean)
   const unique = [...new Set(sources)]
-  const mediaSourceUrl = state.sources?.[0] || canonicalVideoPage(state.pageUrl) || (unique.length === 1 ? unique[0] : '')
-  const filtered = filterDiscoveries(all, settings)
+  const mediaSourceUrl = state.sources?.[0] || canonicalVideoPage(state.pageUrl) || (unique.length === 1 ? unique[0] : '') || (grouped.videos.length === 1 ? grouped.videos[0].url : '')
+  const filtered = filterDiscoveries(grouped.items, settings)
   const items = mediaSourceUrl || state.videos?.some(video => canonicalVideoPage(video.url)) ? filtered.filter(item => !isVkMedia(item.url)) : filtered
   const thumbnail = Object.values(state.contexts || {}).find(context => context?.thumbnail)?.thumbnail
-  return { items, hiddenCount: all.length - filtered.length, mediaSourceUrl,
-    currentVideo: mediaSourceUrl ? { url: mediaSourceUrl, title: state.title || 'Видео', thumbnail, pending: true } : null }
+  return { items, hiddenCount: grouped.items.length - filtered.length, mediaSourceUrl, currentVideos: grouped.videos,
+    currentVideo: grouped.videos.find(video => video.url === mediaSourceUrl) || (mediaSourceUrl ? { url: mediaSourceUrl, title: state.title || 'Видео', thumbnail, pending: true } : null) }
 }
 
 function updateBadge(tabId) {
@@ -119,11 +122,13 @@ async function rememberVideo(tabId, result) {
   const videos = state.videos
   if (result.kind !== 'video') return videos
   const url = canonicalVideoPage(result.url) || result.url
-  const index = videos.findIndex(video => video.url === url), existing = videos[index]
-  if (result.pending && existing && !existing.pending) return videos
-  const entry = { ...result, url }
-  if (existing && JSON.stringify(existing) === JSON.stringify(entry)) return videos
-  const next = (index < 0 ? [entry, ...videos] : videos.map((video, at) => at === index ? entry : video)).slice(0, 30)
+  const existing = videos.find(video => video.url === url)
+  const aliases = [...new Set([...(result.aliases || []), ...(existing?.aliases || [])])].filter(alias => alias !== url).slice(0, 24)
+  const entry = { ...(result.pending && existing && !existing.pending ? existing : result), url, ...(aliases.length ? { aliases } : {}) }
+  const kept = videos.filter(video => video.url === url || !aliases.includes(video.url))
+  const index = kept.findIndex(video => video.url === url)
+  if (existing && kept.length === videos.length && JSON.stringify(existing) === JSON.stringify(entry)) return videos
+  const next = (index < 0 ? [entry, ...kept] : kept.map((video, at) => at === index ? entry : video)).slice(0, 30)
   state.videos = next
   await chrome.storage.session.set({ [`videos:${tabId}`]: { scope: state.videoScope, items: next } })
   touch(tabId)
@@ -205,6 +210,7 @@ chrome.webRequest.onHeadersReceived.addListener(
     if (!settings.sniffMedia || details.tabId < 0) return
     const candidate = sniffCandidate(details)
     if (!candidate) return
+    if (Number.isInteger(details.frameId) && details.frameId >= 0) candidate.frameId = details.frameId
     tabState(details.tabId).then((state) => {
       const existing = state.sniffed.find((item) => item.url === details.url)
       if (existing) Object.assign(existing, candidate)
@@ -304,7 +310,7 @@ async function onMessage(message, sender) {
         if (state.pageUrl && state.pageUrl !== message.pageUrl) {
           state.sniffed = []
           state.frames = {} // SPA navigation, including query/hash routes
-          state.sources = {}; state.contexts = {}
+          state.sources = {}; state.contexts = {}; state.players = {}
         }
         state.pageUrl = message.pageUrl
         state.title = message.title
@@ -313,7 +319,10 @@ async function onMessage(message, sender) {
       state.sources ||= {}; state.contexts ||= {}
       state.sources[sender.frameId || 0] = canonicalVideoPage(message.mediaSourceUrl || message.pageUrl)
       state.contexts[sender.frameId || 0] = { thumbnail: isHttp(message.context?.thumbnail) ? String(message.context.thumbnail).slice(0, 16384) : '' }
-      const current = findingsOf(state).currentVideo
+      state.players ||= {}
+      state.players[sender.frameId || 0] = normalizePlayers(message.players, sender.frameId || 0, message.pageUrl)
+      const snapshot = findingsOf(state), current = snapshot.currentVideo
+      for (const video of snapshot.currentVideos) await rememberVideo(tabId, video)
       if (current) await rememberVideo(tabId, { ...current, kind: 'video' })
       touch(tabId)
       return null
@@ -343,7 +352,11 @@ async function onMessage(message, sender) {
       const cached = (await chrome.storage.session.get(key))[key]
       if (!message.force && cached?.url === message.url && cached.nodeId === settings.downloadNodeId && cached.routerUrl === settings.routerUrl && cached.accountSession === auth.accountSession) return { ok: true, result: cached.result, videos: await rememberVideo(message.tabId, cached.result) }
       try {
-        const result = await extractMedia(auth, message.url)
+        let result = await extractMedia(auth, message.url)
+        if (result.kind === 'video') {
+          const url = canonicalVideoPage(result.url) || canonicalVideoPage(message.url) || message.url
+          result = { ...result, url, ...(result.url !== url ? { aliases: [result.url] } : {}) }
+        }
         if (auth.accountSession !== (await routerSettings(settings)).accountSession) throw new Error('Аккаунт изменился. Повторите поиск видео.')
         chrome.storage.session.set({ [key]: { url: message.url, nodeId: settings.downloadNodeId, routerUrl: settings.routerUrl, accountSession: auth.accountSession, result } }).catch(() => {})
         return { ok: true, result, videos: await rememberVideo(message.tabId, result) }

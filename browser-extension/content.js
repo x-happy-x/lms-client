@@ -10,6 +10,15 @@
   let sniffMedia = true
   let resourcePage = location.href
   const resources = new Map()
+  const playerIds = new WeakMap()
+  let nextPlayer = 0, detectedPlayers = []
+  function httpUrl(raw) {
+    if (!raw) return ''
+    try { const url = new URL(raw, document.baseURI); return /^https?:$/.test(url.protocol) && !url.username && !url.password ? url.href : '' } catch { return '' }
+  }
+  function sourcePage() {
+    return document.querySelector('a.VideoViewer-SourcePathLink[href], a.VideoViewer-SourceIconLink[href]')?.href || location.href
+  }
 
   chrome.storage.sync.get({ interceptMagnets: true, sniffMedia: true }, (value) => {
     magnetIntercept = value.interceptMagnets !== false
@@ -58,6 +67,35 @@
         }
       }
     }
+    const primary = roots.flatMap(root => [...root.querySelectorAll('video')]).filter(video => {
+      const rect = video.getBoundingClientRect()
+      return (!video.paused && !video.ended) || (rect.width >= 160 && rect.height >= 80)
+    })
+    const embeds = [...document.querySelectorAll('meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"]')].map(meta => httpUrl(meta.content)).filter(Boolean)
+    detectedPlayers = []
+    const byElement = new Map()
+    for (const video of primary) {
+      const sources = [...new Set([video.currentSrc, video.getAttribute('src'), video.getAttribute('data-src'), ...[...video.querySelectorAll('source')].map(source => source.getAttribute('src') || source.getAttribute('data-src'))].map(httpUrl).filter(Boolean))]
+      if (primary.length > 1 && !sources.length) continue // Ambiguous MSE players stay separate.
+      if (!playerIds.has(video)) playerIds.set(video, `player-${++nextPlayer}`)
+      const player = { id: playerIds.get(video), pageUrl: primary.length === 1 ? sourcePage() : sources[0], page: primary.length === 1,
+        title: video.getAttribute('title') || video.getAttribute('aria-label') || document.title,
+        thumbnail: video.poster || document.querySelector('meta[property="og:image"]')?.content || '', durationSeconds: video.duration,
+        sources, aliases: primary.length === 1 ? embeds : [], active: !video.paused && !video.ended }
+      detectedPlayers.push(player); byElement.set(video, player)
+    }
+    if (!primary.length) {
+      const frames = [...document.querySelectorAll('iframe[src]')].filter(frame => {
+        const rect = frame.getBoundingClientRect()
+        return rect.width >= 160 && rect.height >= 80 && embeds.includes(httpUrl(frame.src))
+      })
+      if (frames.length === 1) {
+        const frame = frames[0]
+        if (!playerIds.has(frame)) playerIds.set(frame, `player-${++nextPlayer}`)
+        detectedPlayers.push({ id: playerIds.get(frame), pageUrl: sourcePage(), page: true, title: document.title,
+          thumbnail: document.querySelector('meta[property="og:image"]')?.content || '', sources: [], aliases: [httpUrl(frame.src)], active: false })
+      }
+    }
     for (const root of roots) {
       for (const media of root.querySelectorAll('video, audio')) {
         const source = media.tagName === 'VIDEO' ? 'video' : 'audio'
@@ -68,6 +106,7 @@
           thumbnail: media.poster || track?.artwork?.find(art => /^https?:/i.test(art.src))?.src || '', durationSeconds: media.duration,
           width: media.videoWidth, height: media.videoHeight
         }
+        if (byElement.has(media)) metadata.playerId = byElement.get(media).id
         push(media.currentSrc || media.getAttribute('src') || media.getAttribute('data-src'), source, name, metadata)
         for (const child of media.querySelectorAll('source[src], source[data-src]')) {
           push(child.getAttribute('src') || child.getAttribute('data-src'), source, name, metadata)
@@ -83,7 +122,7 @@
     const poster = document.querySelector('meta[property="og:image"]')?.content || ''
     for (const meta of document.querySelectorAll('meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"], meta[name="twitter:player:stream"]')) {
       const content = meta.getAttribute('content') || ''
-      push(content, 'video', document.title, { thumbnail: poster })
+      push(content, 'video', document.title, { thumbnail: poster, ...(detectedPlayers.length === 1 ? { playerId: detectedPlayers[0].id } : {}) })
     }
     if (resourcePage !== location.href) {
       resources.clear()
@@ -124,7 +163,7 @@
     const embeddedSource = [...document.querySelectorAll('iframe[src]')].map(frame => frame.src).find(url => /^https?:\/\/(?:www\.)?(?:vkvideo\.ru|vk\.com)\/video(?:_ext\.php|-?\d+_\d+)/.test(url))
     const video = document.querySelector('video')
     const context = video ? { thumbnail: video.poster || document.querySelector('meta[property="og:image"]')?.content || '', durationSeconds: video.duration, height: video.videoHeight } : null
-    chrome.runtime.sendMessage({ type: 'scan', pageUrl: location.href, mediaSourceUrl: selectedSource || embeddedSource || location.href, title: document.title, context, items }).catch(() => {})
+    chrome.runtime.sendMessage({ type: 'scan', pageUrl: location.href, mediaSourceUrl: selectedSource || embeddedSource || location.href, title: document.title, context, players: detectedPlayers, items }).catch(() => {})
   }
 
   function schedule(delay = 800) {

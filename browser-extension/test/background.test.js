@@ -140,3 +140,14 @@ test('identified videos survive SPA navigation independently while music stays s
   assert.equal(values['videos:91'],undefined)
  }finally{globalThis.fetch=previous;chrome.storage.onChanged.listeners[0]({routerUrl:{newValue:''}},'sync')}
 })
+
+test('a late parent player merges the already discovered embed without losing music',async()=>{
+ const parent='https://course.example/lesson?id=7',embed='https://player.example/embed/7'
+ await message({type:'scan',pageUrl:embed,title:'Embedded lesson',items:[{url:'https://cdn.example/lesson.mp4',source:'video',playerId:'child'}],players:[{id:'child',pageUrl:embed,title:'Embedded lesson',sources:['https://cdn.example/lesson.mp4'],aliases:[]}]},{tab:{id:100},frameId:1})
+ assert.equal((await findings(100)).videos.length,1)
+ await message({type:'scan',pageUrl:parent,title:'Course lesson',items:[{url:embed,source:'video',playerId:'parent'},{url:'https://music.example/track.m4a',source:'audio'}],players:[{id:'parent',pageUrl:parent,title:'Course lesson',sources:[],aliases:[embed]}]},{tab:{id:100},frameId:0})
+ const data=await findings(100)
+ assert.equal(data.videos.length,1);assert.equal(data.videos[0].url,parent)
+ assert.equal(data.items.length,1);assert.equal(data.items[0].kind,'audio')
+ assert.equal(data.mediaSourceUrl,parent)
+})
