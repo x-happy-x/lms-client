@@ -19,6 +19,7 @@ export function videoOptions(settings, playlist) {
     ...(settings.videoEndSeconds != null ? { endSeconds: Number(settings.videoEndSeconds) } : {}),
     ...(settings.videoForceKeyframes && (settings.videoStartSeconds != null || settings.videoEndSeconds != null) ? { forceKeyframes: true } : {}),
     ...(settings.videoEmbedMetadata ? { embedMetadata: true } : {}),
+    ...(settings.videoImpersonate ? { impersonate: settings.videoImpersonate } : {}),
     ...(playlist == null ? {} : { playlist })
   }
 }
@@ -27,8 +28,9 @@ export async function initDownloadPreferences(settings, onChange = () => {}) {
   const $ = (id) => document.getElementById(id)
   const advanced = document.createElement('details')
   advanced.className = 'advanced-options disclosure'
-  advanced.innerHTML = `<summary><span class="disclosure-icon" data-icon="sliders"></span><span class="grow">Дополнительно · yt-dlp / FFmpeg</span><span class="disclosure-chevron" data-icon="chevron"></span></summary><div class="preferences-body"><div class="grid2"><label class="field"><span>Частота кадров</span><select id="videoMaxFps"><option value="0">Любая частота</option>${[24,25,30,50,60,120].map(n => `<option value="${n}">До ${n} fps</option>`).join('')}</select></label><label class="field"><span>Формат аудио</span><select id="videoAudioFormat">${['m4a','mp3','opus','flac','wav'].map(s => `<option value="${s}">${s.toUpperCase()}</option>`).join('')}</select></label></div><div class="grid2"><label class="field"><span>Начало фрагмента</span><input id="videoStartSeconds" placeholder="0:00 или секунды" inputmode="text" /></label><label class="field"><span>Конец фрагмента</span><input id="videoEndSeconds" placeholder="До конца видео" inputmode="text" /></label></div><label class="check"><input id="videoForceKeyframes" type="checkbox" /> Точная обрезка</label><label class="check"><input id="videoEmbedMetadata" type="checkbox" /> Встроить метаданные</label><p class="hint muted">Точная обрезка перекодирует границы фрагмента и занимает больше времени. Формат аудио применяется в режиме «Только аудио».</p><p id="advanced-error" class="result error" role="status"></p></div>`
+  advanced.innerHTML = `<summary><span class="disclosure-icon" data-icon="sliders"></span><span class="grow">Дополнительно · yt-dlp / FFmpeg</span><span class="disclosure-chevron" data-icon="chevron"></span></summary><div class="preferences-body"><label class="field"><span>Сетевой профиль yt-dlp</span><select id="videoImpersonate"><option value="">Обычный запрос</option></select></label><p id="impersonation-status" class="hint muted"></p><div class="grid2"><label class="field"><span>Частота кадров</span><select id="videoMaxFps"><option value="0">Любая частота</option>${[24,25,30,50,60,120].map(n => `<option value="${n}">До ${n} fps</option>`).join('')}</select></label><label class="field"><span>Формат аудио</span><select id="videoAudioFormat">${['m4a','mp3','opus','flac','wav'].map(s => `<option value="${s}">${s.toUpperCase()}</option>`).join('')}</select></label></div><div class="grid2"><label class="field"><span>Начало фрагмента</span><input id="videoStartSeconds" placeholder="0:00 или секунды" inputmode="text" /></label><label class="field"><span>Конец фрагмента</span><input id="videoEndSeconds" placeholder="До конца видео" inputmode="text" /></label></div><label class="check"><input id="videoForceKeyframes" type="checkbox" /> Точная обрезка</label><label class="check"><input id="videoEmbedMetadata" type="checkbox" /> Встроить метаданные</label><p class="hint muted">Точная обрезка перекодирует границы фрагмента и занимает больше времени. Формат аудио применяется в режиме «Только аудио».</p><p id="advanced-error" class="result error" role="status"></p></div>`
   $('destination-status').after(advanced)
+  if (settings.videoImpersonate) $('videoImpersonate').append(new Option(settings.videoImpersonate, settings.videoImpersonate))
   // Static markup only; all user values are assigned through input properties.
   const { hydrateIcons } = await import('./ui.js')
   hydrateIcons(advanced); decorateToggles(advanced)
@@ -37,20 +39,20 @@ export async function initDownloadPreferences(settings, onChange = () => {}) {
   refresh.replaceChildren(icon('refresh'))
   refresh.title = refresh.ariaLabel = 'Обновить ноды и папки'
   refresh.className = 'icon icon-bordered'
-  const keys = ['downloadNodeId', 'downloadPath', 'videoMaxHeight', 'videoAudioOnly', 'videoContainer', 'videoMaxFps', 'videoAudioFormat', 'videoStartSeconds', 'videoEndSeconds', 'videoForceKeyframes', 'videoEmbedMetadata']
+  const keys = ['downloadNodeId', 'downloadPath', 'videoMaxHeight', 'videoAudioOnly', 'videoContainer', 'videoMaxFps', 'videoAudioFormat', 'videoStartSeconds', 'videoEndSeconds', 'videoForceKeyframes', 'videoEmbedMetadata', 'videoImpersonate']
   const updateSummary = () => {
     const summary = $('download-summary')
     if (!summary) return
     const quality = settings.videoAudioOnly ? `Только аудио · ${(settings.videoAudioFormat || 'm4a').toUpperCase()}` :
       [Number(settings.videoMaxHeight) ? `До ${settings.videoMaxHeight}p` : 'Лучшее качество', settings.videoContainer !== 'auto' ? settings.videoContainer?.toUpperCase() : ''].filter(Boolean).join(' · ')
-    summary.textContent = `${quality} · ${settings.downloadPath || 'Папка по умолчанию'}`
+    summary.textContent = `${quality}${settings.videoImpersonate ? ` · ${settings.videoImpersonate}` : ''} · ${settings.downloadPath || 'Папка по умолчанию'}`
     summary.title = summary.textContent
   }
   const save = async (key, value) => {
     settings[key] = value
     updateSummary()
     await chrome.storage.sync.set({ [key]: value })
-    onChange()
+    onChange(key)
   }
   const updateAudio = () => {
     $('videoMaxHeight').disabled = settings.videoAudioOnly
@@ -59,6 +61,8 @@ export async function initDownloadPreferences(settings, onChange = () => {}) {
     $('videoAudioFormat').disabled = !settings.videoAudioOnly
     $('videoForceKeyframes').disabled = settings.videoStartSeconds == null && settings.videoEndSeconds == null
   }
+  const { loadProfileOptions } = await import('./ytdlp-ui.js')
+  const loadNetwork = async () => loadProfileOptions($('videoImpersonate'), settings.videoImpersonate || '', $('downloadNodeId').value, $('impersonation-status'))
   const loadTargets = async () => {
     const nodeId = $('downloadNodeId').value
     $('download-paths').replaceChildren()
@@ -98,7 +102,7 @@ export async function initDownloadPreferences(settings, onChange = () => {}) {
       if (key === 'downloadNodeId') {
         $('downloadPath').value = ''
         await save('downloadPath', '')
-        await loadTargets()
+        await Promise.all([loadTargets(), loadNetwork()])
       }
     })
   }
@@ -119,7 +123,7 @@ export async function initDownloadPreferences(settings, onChange = () => {}) {
     }
     select.value = selected
     if (!answer?.ok) { status.textContent = answer?.error || 'Не удалось получить ноды. Проверьте подключение к LMS.'; return }
-    await loadTargets()
+    await Promise.all([loadTargets(), loadNetwork()])
   }
   $('refresh-destinations').addEventListener('click', () => { void loadNodes() })
   if (settings.routerUrl) await loadNodes()

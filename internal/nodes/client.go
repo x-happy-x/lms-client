@@ -191,7 +191,14 @@ func (c *Client) PreflightJob(ctx context.Context, node domain.Node, url string)
 // ExtractMedia asks the node's yt-dlp what the page at url contains. yt-dlp errors come back
 // as *NodeError (422 with its message).
 func (c *Client) ExtractMedia(ctx context.Context, node domain.Node, pageURL string) (domain.NodeMediaExtractResponse, error) {
-	body, err := json.Marshal(map[string]string{"url": pageURL})
+	return c.ExtractMediaWithOptions(ctx, node, pageURL, "")
+}
+func (c *Client) ExtractMediaWithOptions(ctx context.Context, node domain.Node, pageURL, impersonate string) (domain.NodeMediaExtractResponse, error) {
+	payload := map[string]string{"url": pageURL}
+	if impersonate != "" {
+		payload["impersonate"] = impersonate
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return domain.NodeMediaExtractResponse{}, err
 	}

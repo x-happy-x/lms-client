@@ -55,7 +55,7 @@ test('reload and query-only SPA navigation discard findings from the previous pa
 })
 
 test('a website content script cannot start login, inspect the Account session or open a preview tab', async () => {
-  for (const type of ['accountLogin', 'accountLogout', 'accountStatus', 'preview', 'prepareStream', 'mediaInfo', 'jobProgress']) {
+  for (const type of ['accountLogin', 'accountLogout', 'accountStatus', 'preview', 'prepareStream', 'mediaInfo', 'jobProgress', 'mediaCapabilities', 'diagnose']) {
     const result = await message({ type }, { url: 'https://example.com', tab: { id: 1 } })
     assert.equal(result.ok, false)
     assert.match(result.error, /только из окна расширения/)

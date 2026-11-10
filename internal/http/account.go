@@ -173,6 +173,10 @@ func (a *accountAuth) wrap(next http.Handler) http.Handler {
 			authError(w, status)
 			return
 		}
+		if path == "/api/ui/media/diagnose" && user.Role != "admin" {
+			authError(w, 403)
+			return
+		}
 		mutating := r.Method != http.MethodGet && r.Method != http.MethodHead
 		headerAuth := strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || (a.gatewayToken != "" && strings.HasPrefix(r.Header.Get("Authorization"), "Basic "))
 		if mutating && !headerAuth && (a.public == "" || r.Header.Get("Origin") != a.public) {

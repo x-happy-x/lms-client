@@ -1,3 +1,4 @@
+import { initDiagnostics } from './lib/ytdlp-ui.js'
 import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences } from './lib/preferences.js'
 import { decorateToggles, hydrateIcons } from './lib/ui.js'
@@ -67,6 +68,7 @@ async function init() {
     result.className = `result ${answer?.ok ? 'ok' : 'error'}`
   })
   void initDownloadPreferences(settings)
+  void initDiagnostics(settings)
 }
 
 void init()

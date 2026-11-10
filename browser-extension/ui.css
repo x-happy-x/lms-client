@@ -265,3 +265,8 @@ code { font-size: 12px; }
 .media-meta .select-label > .ui-icon { width: 11px; height: 11px; color: currentColor; }
 .download-water[data-state=ERROR] .water-wave path, .download-water[data-state=CANCELED] .water-wave path { animation-play-state: paused; }
 .music-section { margin-top: 16px; }
+#diagnostic-form { display: grid; gap: 12px; }
+#diagnostic-form .field { margin: 0; }
+#diagnostic-run { display: inline-flex; align-items: center; gap: 6px; }
+#diagnostic-output pre { margin: 6px 0 16px; padding: 12px; max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font: 12px/1.5 ui-monospace, Consolas, monospace; }
+#diagnostic-command { max-height: 140px; }

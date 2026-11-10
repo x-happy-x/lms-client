@@ -4,6 +4,7 @@ import "fmt"
 
 // YtDlpOptions is persisted with the job and sent unchanged to the worker.
 type YtDlpOptions struct {
+	Impersonate    string `json:"impersonate,omitempty"`
 	MaxHeight      *int   `json:"maxHeight,omitempty"`
 	AudioOnly      bool   `json:"audioOnly,omitempty"`
 	Container      string `json:"container,omitempty"`
@@ -19,6 +20,9 @@ type YtDlpOptions struct {
 func (o *YtDlpOptions) Validate(jobType JobType) error {
 	if o == nil {
 		return nil
+	}
+	if err := ValidateImpersonation(o.Impersonate); err != nil {
+		return err
 	}
 	if jobType != JobTypeYTDLP {
 		return fmt.Errorf("ytdlpOptions require YTDLP job type")

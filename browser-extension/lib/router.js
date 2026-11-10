@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS = {
   videoEndSeconds: null,
   videoForceKeyframes: false,
   videoEmbedMetadata: false,
+  videoImpersonate: '',
   notifications: true
 }
 
@@ -70,7 +71,7 @@ async function request(settings, path, init = {}, fetchImpl = fetch) {
  * playlist / page with several videos as `entries`. Slow on big playlists (up to ~2 min).
  */
 export function extractMedia(settings, url, fetchImpl) {
-  return request(settings, '/media/extract', { method: 'POST', body: JSON.stringify({ url, nodeId: settings.downloadNodeId || undefined }) }, fetchImpl)
+  return request(settings, '/media/extract', { method: 'POST', body: JSON.stringify({ url, nodeId: settings.downloadNodeId || undefined, impersonate: settings.videoImpersonate || undefined }) }, fetchImpl)
 }
 
 export function listNodes(settings, fetchImpl) {
@@ -78,11 +79,11 @@ export function listNodes(settings, fetchImpl) {
 }
 
 export function mediaInfo(settings, url, direct = false, fetchImpl) {
-  return request(settings, '/media/info', { method: 'POST', body: JSON.stringify({ url, direct, nodeId: settings.downloadNodeId || undefined, maxHeight: Number(settings.videoMaxHeight) || undefined, maxFps: Number(settings.videoMaxFps) || undefined }) }, fetchImpl)
+  return request(settings, '/media/info', { method: 'POST', body: JSON.stringify({ url, direct, nodeId: settings.downloadNodeId || undefined, maxHeight: Number(settings.videoMaxHeight) || undefined, maxFps: Number(settings.videoMaxFps) || undefined, impersonate: settings.videoImpersonate || undefined }) }, fetchImpl)
 }
 
 export async function prepareMedia(settings, item, fetchImpl) {
-  const result = await request(settings, '/media/preview', { method: 'POST', body: JSON.stringify({ url: item.url, direct: !item.page, nodeId: settings.downloadNodeId || undefined, maxHeight: Number(item.maxHeight || settings.videoMaxHeight) || undefined, maxFps: Number(item.maxFps || settings.videoMaxFps) || undefined }) }, fetchImpl)
+  const result = await request(settings, '/media/preview', { method: 'POST', body: JSON.stringify({ url: item.url, direct: !item.page, nodeId: settings.downloadNodeId || undefined, maxHeight: Number(item.maxHeight || settings.videoMaxHeight) || undefined, maxFps: Number(item.maxFps || settings.videoMaxFps) || undefined, impersonate: settings.videoImpersonate || undefined }) }, fetchImpl)
   if (!/^\/api\/ui\/media\/stream\/[A-Za-z0-9_-]{43}$/.test(result.streamUrl || '')) throw new Error('Некорректный адрес потока LMS')
   return { ...result, streamUrl: normalizeRouterUrl(settings.routerUrl) + result.streamUrl }
 }
@@ -126,10 +127,10 @@ export async function sendToRouter(settings, url, { type, maxSpeedBytes, nodeId,
   const preflight = await request(settings, '/jobs/preflight', { method: 'POST', body: JSON.stringify({ url }) }, fetchImpl)
   const videoOptions = ytdlpOptions || savedVideoOptions(settings)
   const needsOptions = (type || suggestType(url)) === 'YTDLP' && Object.keys(videoOptions).length > 0
-  const needsAdvanced = ['audioFormat', 'maxFps', 'startSeconds', 'endSeconds', 'forceKeyframes', 'embedMetadata'].some(key => key in videoOptions)
+  const needsAdvanced = ['audioFormat', 'maxFps', 'startSeconds', 'endSeconds', 'forceKeyframes', 'embedMetadata', 'impersonate'].some(key => key in videoOptions)
   let candidates = preflight
   if (needsOptions) {
-    candidates = { ...preflight, nodes: (preflight.nodes || []).filter((node) => node.ytdlpOptionsSupported && (!needsAdvanced || node.advancedOptionsSupported)) }
+    candidates = { ...preflight, nodes: (preflight.nodes || []).filter((node) => node.ytdlpOptionsSupported && (!needsAdvanced || node.advancedOptionsSupported) && (!videoOptions.impersonate || node.impersonationOptionsSupported)) }
     const preferred = nodeId ?? settings.downloadNodeId
     if (!candidates.nodes.length || (preferred && !candidates.nodes.some((node) => node.nodeId === preferred))) {
       throw new Error('Для качества и плейлистов обновите lms-node и lms-client. Выбранная нода не сообщает поддержку параметров yt-dlp.')
@@ -159,4 +160,11 @@ export async function sendToRouter(settings, url, { type, maxSpeedBytes, nodeId,
     fetchImpl
   )
   return { job, plan }
+}
+
+export function mediaCapabilities(settings, nodeId = settings.downloadNodeId, fetchImpl) {
+  return request(settings, '/media/capabilities' + (nodeId ? `?nodeId=${encodeURIComponent(nodeId)}` : ''), {}, fetchImpl)
+}
+export function diagnoseMedia(settings, input, fetchImpl) {
+  return request(settings, '/media/diagnose', { method: 'POST', body: JSON.stringify(input) }, fetchImpl)
 }
