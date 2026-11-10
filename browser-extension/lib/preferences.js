@@ -1,4 +1,5 @@
 // The popup and options page edit the same saved download defaults.
+import { icon } from './ui.js'
 export function videoOptions(settings, playlist) {
   return {
     ...(settings.videoAudioOnly ? { audioOnly: true } : {
@@ -12,6 +13,10 @@ export function videoOptions(settings, playlist) {
 export async function initDownloadPreferences(settings, onChange = () => {}) {
   const $ = (id) => document.getElementById(id)
   const status = $('destination-status')
+  const refresh = $('refresh-destinations')
+  refresh.replaceChildren(icon('refresh'))
+  refresh.title = refresh.ariaLabel = 'Обновить ноды и папки'
+  refresh.className = 'icon icon-bordered'
   const keys = ['downloadNodeId', 'downloadPath', 'videoMaxHeight', 'videoAudioOnly', 'videoContainer']
   const updateSummary = () => {
     const summary = $('download-summary')

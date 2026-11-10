@@ -1,77 +1,54 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <title>LMS</title>
-    <link rel="stylesheet" href="ui.css" />
-  </head>
+  <head><meta charset="utf-8" /><title>LMS</title><link rel="stylesheet" href="ui.css" /></head>
   <body class="popup">
     <header class="bar">
-      <img src="icons/icon32.png" alt="" width="20" height="20" />
-      <strong>LMS</strong>
-      <span id="status" class="pill muted">…</span>
-      <span class="grow"></span>
-      <button id="open-ui" class="icon" title="Открыть LMS">↗</button>
-      <button id="open-options" class="icon" title="Настройки">⚙</button>
+      <img src="icons/icon32.png" alt="" width="22" height="22" /><strong>LMS</strong>
+      <span id="status" class="pill muted">…</span><span class="grow"></span>
+      <button id="open-ui" class="icon" title="Открыть LMS" aria-label="Открыть LMS"></button>
+      <button id="open-options" class="icon" title="Настройки" aria-label="Настройки"></button>
     </header>
-
-    <section id="setup" class="notice" hidden>
-      Укажите адрес LMS на роутере в <a href="#" id="setup-link">настройках</a>.
-    </section>
-
-    <section class="page">
-      <div class="page-title" id="page-title"></div>
-      <div class="row">
-        <button id="extract" class="btn" title="yt-dlp на ноде найдёт видео и плейлисты на этой странице">Найти через yt-dlp</button>
-      </div>
-      <div class="row">
-        <button id="send-page" class="btn">Отправить страницу (yt-dlp)</button>
-        <label class="speed" title="Ограничение скорости для отправки">
-          <select id="speed">
-            <option value="0">Без лимита</option>
-            <option value="1048576">1 МБ/с</option>
-            <option value="5242880">5 МБ/с</option>
-            <option value="10485760">10 МБ/с</option>
-            <option value="26214400">25 МБ/с</option>
-            <option value="52428800">50 МБ/с</option>
-          </select>
-        </label>
-      </div>
-    </section>
-
-    <details class="download-preferences">
-      <summary>Качество и папка загрузки<span id="download-summary" class="preferences-summary"></span></summary>
+    <section id="setup" class="notice" hidden>Укажите адрес LMS в <a href="#" id="setup-link">настройках</a>.</section>
+    <div class="page-context">
+      <div class="page-title grow" id="page-title"></div>
+      <button id="extract" class="icon" title="Найти видео и плейлист через yt-dlp" aria-label="Найти видео и плейлист через yt-dlp"></button>
+      <button id="send-page" class="icon" title="Скачать по ссылке страницы" aria-label="Скачать по ссылке страницы"></button>
+    </div>
+    <nav class="view-tabs" role="tablist" aria-label="Источники видео">
+      <button id="tab-page" class="view-tab" role="tab" aria-controls="panel-page" aria-selected="true">На текущей странице <span id="count" class="tab-count"></span></button>
+      <button id="tab-playlist" class="view-tab" role="tab" aria-controls="panel-playlist" aria-selected="false" tabindex="-1">Плейлист <span id="playlist-count" class="tab-count"></span></button>
+    </nav>
+    <details class="download-preferences disclosure">
+      <summary><span class="disclosure-icon" data-icon="sliders"></span><span class="grow">Параметры загрузки<span id="download-summary" class="preferences-summary"></span></span><span class="disclosure-chevron" data-icon="chevron"></span></summary>
       <div class="preferences-body">
         <div class="grid2">
-          <label class="field"><span>Качество видео</span><select id="videoMaxHeight">
-            <option value="0">Лучшее доступное</option><option value="2160">До 2160p · 4K</option><option value="1440">До 1440p</option><option value="1080">До 1080p · Full HD</option><option value="720">До 720p · HD</option><option value="480">До 480p</option><option value="360">До 360p</option>
-          </select></label>
-          <label class="field"><span>Контейнер видео</span><select id="videoContainer"><option value="auto">Автоматически</option><option value="mp4">MP4</option><option value="mkv">MKV</option></select></label>
+          <label class="field"><span>Качество видео</span><select id="videoMaxHeight"><option value="0">Лучшее доступное</option><option value="2160">До 2160p · 4K</option><option value="1440">До 1440p</option><option value="1080">До 1080p · Full HD</option><option value="720">До 720p · HD</option><option value="480">До 480p</option><option value="360">До 360p</option></select></label>
+          <label class="field"><span>Контейнер</span><select id="videoContainer"><option value="auto">Автоматически</option><option value="mp4">MP4</option><option value="mkv">MKV</option></select></label>
         </div>
-        <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио · M4A</label>
-        <p class="hint muted">Качество и формат применяются для yt-dlp. Для прямых HTTP-ссылок скачивается исходный файл.</p>
-        <div class="row"><label class="field grow"><span>Куда скачать · нода</span><select id="downloadNodeId"><option value="">Автоматически</option></select></label><button id="refresh-destinations" class="btn small" type="button">Обновить</button></div>
-        <label class="field"><span>Папка на ноде</span><input id="downloadPath" list="download-paths" placeholder="По умолчанию или, например, video/courses" autocomplete="off" /></label>
-        <datalist id="download-paths"></datalist>
-        <p id="destination-status" class="hint muted"></p>
-        <p class="hint muted">Выбор сохраняется и применяется к следующим загрузкам, в том числе из контекстного меню.</p>
+        <div class="row spread">
+          <label class="check"><input id="videoAudioOnly" type="checkbox" /> Только аудио · M4A</label>
+          <label class="speed"><span class="sr-only">Ограничение скорости</span><select id="speed" aria-label="Ограничение скорости"><option value="0">Без лимита</option><option value="1048576">1 МБ/с</option><option value="5242880">5 МБ/с</option><option value="10485760">10 МБ/с</option><option value="26214400">25 МБ/с</option><option value="52428800">50 МБ/с</option></select></label>
+        </div>
+        <div class="row"><label class="field grow"><span>Нода</span><select id="downloadNodeId"><option value="">Автоматически</option></select></label><button id="refresh-destinations" class="icon icon-bordered" type="button" title="Обновить ноды и папки" aria-label="Обновить ноды и папки"></button></div>
+        <label class="field"><span>Папка на ноде</span><input id="downloadPath" list="download-paths" placeholder="По умолчанию или video/courses" autocomplete="off" /></label>
+        <datalist id="download-paths"></datalist><p id="destination-status" class="hint muted"></p>
+        <p class="hint muted">Качество и формат применяются для yt-dlp. Выбор сохраняется.</p>
       </div>
     </details>
-
-    <section id="ytdlp" class="ytdlp" hidden></section>
-
-    <form id="quick" class="row quick">
-      <input id="quick-url" type="text" placeholder="Ссылка или magnet:" autocomplete="off" />
-      <button class="btn primary" type="submit">В LMS</button>
-    </form>
-
-    <div class="row findings-heading">
-      <h2 class="section-title grow">На странице <span id="count" class="muted"></span></h2>
-      <button id="rescan" class="btn small">Проверить страницу</button>
-    </div>
-    <ul id="items" class="items"></ul>
-    <p id="empty" class="empty muted" hidden>Видео, файлов и magnet-ссылок не найдено. Запустите видео — плеер часто подгружает поток только при воспроизведении.</p>
-
+    <div id="extract-feedback" class="result muted" role="status"></div>
+    <section id="panel-page" role="tabpanel" aria-labelledby="tab-page">
+      <div class="findings-heading row"><span class="list-caption grow">Найденные файлы</span><button id="rescan" class="icon" title="Обновить видео на странице" aria-label="Обновить видео на странице"></button></div>
+      <div id="single-video" class="ytdlp" hidden></div><ul id="items" class="items"></ul>
+      <div id="empty" class="empty-state" hidden><span data-icon="video"></span><strong>Пока ничего не найдено</strong><p class="muted">Запустите видео на странице или воспользуйтесь поиском вверху.</p></div>
+    </section>
+    <section id="panel-playlist" role="tabpanel" aria-labelledby="tab-playlist" hidden>
+      <div id="ytdlp" class="ytdlp" hidden></div>
+      <div id="playlist-empty" class="empty-state"><span data-icon="playlist"></span><strong>Плейлист этой страницы</strong><p id="playlist-empty-text" class="muted">Откройте страницу с плейлистом. Здесь появятся его ролики и превью.</p></div>
+    </section>
+    <details class="quick-add disclosure">
+      <summary><span class="disclosure-icon" data-icon="link"></span><span class="grow">Добавить ссылку</span><span class="disclosure-chevron" data-icon="chevron"></span></summary>
+      <form id="quick" class="row quick"><input id="quick-url" type="text" placeholder="Ссылка или magnet:" aria-label="Ссылка или magnet" autocomplete="off" /><button class="icon primary" type="submit" title="Скачать по ссылке" aria-label="Скачать по ссылке" data-icon="download"></button></form>
+    </details>
     <script type="module" src="popup.js"></script>
   </body>
 </html>
