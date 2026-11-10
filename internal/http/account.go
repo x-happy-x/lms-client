@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -28,6 +29,7 @@ type accountPending struct {
 }
 type accountAuth struct {
 	origin, public string
+	gatewayToken   string
 	client         *http.Client
 	mu             sync.Mutex
 	pending        map[string]accountPending
@@ -75,6 +77,9 @@ func (a *accountAuth) call(r *http.Request, method, path, token string, input, o
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	if path == "/api/gateway/basic" {
+		req.Header.Set("X-Gateway-Token", a.gatewayToken)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -93,6 +98,27 @@ func (a *accountAuth) call(r *http.Request, method, path, token string, input, o
 	return http.StatusOK
 }
 func (a *accountAuth) identity(r *http.Request) (accountUser, int) {
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Basic ") {
+		login, password, ok := r.BasicAuth()
+		peer, _, _ := net.SplitHostPort(r.RemoteAddr)
+		localProxy := net.ParseIP(peer) != nil && net.ParseIP(peer).IsLoopback()
+		if !ok || login == "" || password == "" || a.gatewayToken == "" || (r.TLS == nil && !(localProxy && r.Header.Get("X-Forwarded-Proto") == "https")) {
+			return accountUser{}, http.StatusUnauthorized
+		}
+		ip := peer
+		if localProxy && net.ParseIP(r.Header.Get("X-Real-IP")) != nil {
+			ip = r.Header.Get("X-Real-IP")
+		}
+		var user accountUser
+		status := a.call(r, http.MethodPost, "/api/gateway/basic", "", map[string]string{"app": "lms_node", "login": login, "password": password, "ip": ip}, &user)
+		if status != 200 {
+			return accountUser{}, status
+		}
+		if user.Login == "" || (user.Role != "viewer" && user.Role != "editor" && user.Role != "admin") {
+			return accountUser{}, http.StatusForbidden
+		}
+		return user, 200
+	}
 	token := tokenOf(r)
 	if !accountTokenPattern.MatchString(token) {
 		return accountUser{}, http.StatusUnauthorized
@@ -114,6 +140,8 @@ func authError(w http.ResponseWriter, status int) {
 	message := "Нет доступа к LMS"
 	if status == 401 {
 		message = "Войдите через Account"
+	} else if status == 429 {
+		message = "Слишком много попыток входа"
 	} else if status != 403 {
 		status = 503
 		message = "Account недоступен, повторите позже"
@@ -134,7 +162,8 @@ func (a *accountAuth) wrap(next http.Handler) http.Handler {
 			return
 		}
 		mutating := r.Method != http.MethodGet && r.Method != http.MethodHead
-		if mutating && !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") && (a.public == "" || r.Header.Get("Origin") != a.public) {
+		headerAuth := strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || (a.gatewayToken != "" && strings.HasPrefix(r.Header.Get("Authorization"), "Basic "))
+		if mutating && !headerAuth && (a.public == "" || r.Header.Get("Origin") != a.public) {
 			authError(w, 403)
 			return
 		}
@@ -243,7 +272,7 @@ func (a *accountAuth) callback(w http.ResponseWriter, r *http.Request) {
 	a.sessionCookie(w, result.Token, result.Expires)
 	http.Redirect(w, r, pending.Return, 302)
 }
-func withAccount(mux *http.ServeMux, origin, public string) http.Handler {
+func withAccount(mux *http.ServeMux, origin, public string, gatewayToken ...string) http.Handler {
 	if origin == "" {
 		mux.HandleFunc("/api/ui/auth/config", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]bool{"enabled": false}) })
 		return mux
@@ -263,6 +292,9 @@ func withAccount(mux *http.ServeMux, origin, public string) http.Handler {
 		}
 	}
 	a := &accountAuth{origin: origin, public: public, pending: make(map[string]accountPending), client: &http.Client{Timeout: 4 * time.Second, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}}
+	if len(gatewayToken) > 0 {
+		a.gatewayToken = gatewayToken[0]
+	}
 	mux.HandleFunc("/api/ui/auth/config", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(405)

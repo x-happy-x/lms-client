@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"lms-router-control-plane/internal/app/config"
@@ -33,6 +34,17 @@ type App struct {
 }
 
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version string) (*App, error) {
+	var gatewayToken string
+	if path := os.Getenv("ROUTERD_ACCOUNT_GATEWAY_TOKEN_FILE"); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read Account gateway credential: %w", err)
+		}
+		gatewayToken = strings.TrimSpace(string(data))
+		if len(gatewayToken) < 32 || len(gatewayToken) > 4096 {
+			return nil, fmt.Errorf("invalid Account gateway credential length")
+		}
+	}
 	db, err := sqlite.Open(ctx, cfg.SQLite)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -60,16 +72,17 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		logger,
 	)
 	handler := httpapi.NewHandler(httpapi.Dependencies{
-		AccountOrigin: os.Getenv("ROUTERD_ACCOUNT_ORIGIN"),
-		PublicOrigin:  os.Getenv("ROUTERD_PUBLIC_ORIGIN"),
-		DB:            db.SQL,
-		Version:       version,
-		JobRepo:       jobRepo,
-		NodeRepo:      nodeRepo,
-		ProfileRepo:   profileRepo,
-		JobController: schedulerSvc,
-		NodeClient:    nodeClient,
-		StaticDir:     staticDir(),
+		AccountOrigin:       os.Getenv("ROUTERD_ACCOUNT_ORIGIN"),
+		AccountGatewayToken: gatewayToken,
+		PublicOrigin:        os.Getenv("ROUTERD_PUBLIC_ORIGIN"),
+		DB:                  db.SQL,
+		Version:             version,
+		JobRepo:             jobRepo,
+		NodeRepo:            nodeRepo,
+		ProfileRepo:         profileRepo,
+		JobController:       schedulerSvc,
+		NodeClient:          nodeClient,
+		StaticDir:           staticDir(),
 	})
 
 	httpServer := &http.Server{
