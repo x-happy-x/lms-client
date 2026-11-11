@@ -185,7 +185,7 @@ func (a *accountAuth) wrap(next http.Handler) http.Handler {
 		}
 		readPost := r.Method == http.MethodPost && (path == "/api/ui/media/extract" || path == "/api/ui/media/info" || path == "/api/ui/media/preview" || path == "/api/ui/jobs/preflight" || (strings.HasPrefix(path, "/api/ui/nodes/") && strings.HasSuffix(path, "/storage/estimate")))
 		if mutating && !readPost && path != "/api/ui/auth/logout" {
-			if user.Role == "viewer" || ((strings.HasPrefix(path, "/api/ui/nodes") || strings.HasPrefix(path, "/api/ui/profiles")) && user.Role != "admin") {
+			if user.Role == "viewer" || (((strings.HasPrefix(path, "/api/ui/nodes") && !fileMutationPath(path)) || strings.HasPrefix(path, "/api/ui/profiles")) && user.Role != "admin") {
 				authError(w, 403)
 				return
 			}

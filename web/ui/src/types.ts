@@ -1,6 +1,22 @@
 export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'extension' | 'settings'
 export type ThemeMode = 'system' | 'light' | 'dark'
 
+export type StorageFileEntry = {
+  name: string
+  path: string
+  directory: boolean
+  sizeBytes?: number
+  modifiedAt: string
+  mimeType?: string
+}
+export type StorageFileListing = {
+  root: string
+  path: string
+  parentPath?: string
+  entries: StorageFileEntry[]
+  truncated: boolean
+}
+
 export type JobStatus = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'DONE' | 'ERROR' | 'CANCELED'
 
 export type Job = {
