@@ -4,6 +4,8 @@ import { applyQuery, countByStatus, matchesStatus } from '../../lib/jobsView'
 import type { Preferences, ViewMode } from '../../hooks/usePreferences'
 import type { Job, NodeItem } from '../../types'
 import { Icon } from '../../ui/Icon'
+import { PlaylistStack } from './PlaylistStack'
+import { groupPlaylists } from '../../lib/playlists'
 import { JobItem, type JobActions } from './JobItem'
 import { JobsToolbar } from './JobsToolbar'
 
@@ -22,6 +24,11 @@ type JobsPageProps = {
 export function JobsPage({ jobs, nodes, search, prefs, actions, onQuery, onView, onReset, onAdd }: JobsPageProps) {
   const query = useMemo(() => ({ ...prefs.query, search }), [prefs.query, search])
   const groups = useMemo(() => applyQuery(jobs, query, nodes), [jobs, query, nodes])
+  const displayGroups = useMemo(() => {
+    const location = new Map(groups.flatMap(group => group.jobs.map(job => [job.id, group.key] as const)))
+    const stacks = groupPlaylists(groups.flatMap(group => group.jobs))
+    return groups.map(group => ({ ...group, stacks: stacks.filter(stack => location.get(stack.anchorId) === group.key) })).filter(group => group.stacks.length)
+  }, [groups])
   const counts = useMemo(() => countByStatus(jobs), [jobs])
   const kindCounts = useMemo(() => {
     const map = new Map<FileKind, number>()
@@ -66,23 +73,19 @@ export function JobsPage({ jobs, nodes, search, prefs, actions, onQuery, onView,
           )}
         </div>
       ) : (
-        groups.map((group) => (
+        displayGroups.map((group) => (
           <section key={group.key} className="group">
             {group.label ? (
               <h3 className="group-title">
                 {group.label}
-                <span className="count">{group.jobs.length}</span>
+                <span className="count">{group.stacks.reduce((count, stack) => count + stack.jobs.length, 0)}</span>
               </h3>
             ) : null}
             <div className={prefs.view === 'grid' ? 'tiles' : 'rows'}>
-              {group.jobs.map((job) => (
-                <JobItem
-                  key={job.id}
-                  job={job}
-                  node={job.nodeId ? nodeById.get(job.nodeId) : undefined}
-                  actions={actions}
-                  layout={prefs.view === 'grid' ? 'tile' : 'row'}
-                />
+              {group.stacks.map(stack => stack.playlist ? (
+                <PlaylistStack key={stack.key} jobs={stack.jobs} nodeById={nodeById} actions={actions} layout={prefs.view === 'grid' ? 'tile' : 'row'} />
+              ) : (
+                <JobItem key={stack.key} job={stack.jobs[0]} node={stack.jobs[0].nodeId ? nodeById.get(stack.jobs[0].nodeId) : undefined} actions={actions} layout={prefs.view === 'grid' ? 'tile' : 'row'} />
               ))}
             </div>
           </section>

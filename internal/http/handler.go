@@ -59,6 +59,7 @@ type Handler struct {
 }
 
 type createJobRequest struct {
+	Playlist         *domain.JobPlaylist  `json:"playlist,omitempty"`
 	YtdlpOptions     *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
 	Type             string               `json:"type"`
 	URL              string               `json:"url"`
@@ -151,6 +152,7 @@ type createProfileRequest struct {
 }
 
 type jobResponse struct {
+	Playlist        *domain.JobPlaylist  `json:"playlist,omitempty"`
 	YtdlpOptions    *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
 	ID              string               `json:"id"`
 	CreatedAt       string               `json:"createdAt"`
@@ -598,6 +600,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := req.Playlist.Validate(domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type)))); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
+
 	now := time.Now().UTC()
 	status := domain.JobStatusQueued
 	if req.StartImmediately != nil && !*req.StartImmediately {
@@ -615,6 +622,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		Status:        status,
 		MaxSpeedBytes: maxSpeed,
 		YtdlpOptions:  req.YtdlpOptions,
+		Playlist:      req.Playlist,
 	}
 
 	if err := h.jobRepo.Create(r.Context(), job); err != nil {
@@ -1233,6 +1241,7 @@ func toJobResponse(j domain.Job) jobResponse {
 		OutputSizeBytes: j.OutputSizeBytes,
 		MaxSpeedBytes:   j.MaxSpeedBytes,
 		YtdlpOptions:    j.YtdlpOptions,
+		Playlist:        j.Playlist,
 		ErrorText:       j.ErrorText,
 	}
 }
