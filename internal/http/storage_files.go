@@ -6,7 +6,9 @@ import (
 	"io"
 	"lms-router-control-plane/internal/domain"
 	"lms-router-control-plane/internal/nodes"
+	"mime"
 	"net/http"
+	pathutil "path"
 	"strings"
 	"time"
 )
@@ -127,11 +129,21 @@ func (h *Handler) nodeFiles(w http.ResponseWriter, r *http.Request, id string, c
 		writeJSON(w, resp.StatusCode, map[string]string{"error": "Файл недоступен на ноде"})
 		return
 	}
-	for _, name := range append(proxiedFileHeaders, "Content-Disposition") {
+	for _, name := range proxiedFileHeaders {
 		if value := resp.Header.Get(name); value != "" {
 			w.Header().Set(name, value)
 		}
 	}
+	// Do not trust an upstream inline disposition for active documents on the authenticated LMS origin.
+	disposition := "attachment"
+	if r.URL.Query().Get("inline") == "1" && storageInlineType(resp.Header.Get("Content-Type")) {
+		disposition = "inline"
+	}
+	filename := pathutil.Base(path)
+	if _, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition")); err == nil && params["filename"] != "" {
+		filename = params["filename"]
+	}
+	w.Header().Set("Content-Disposition", contentDisposition(disposition, filename))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
@@ -139,5 +151,21 @@ func (h *Handler) nodeFiles(w http.ResponseWriter, r *http.Request, id string, c
 	w.WriteHeader(resp.StatusCode)
 	if r.Method != http.MethodHead {
 		_, _ = io.Copy(w, resp.Body)
+	}
+}
+
+func storageInlineType(raw string) bool {
+	mediaType, _, err := mime.ParseMediaType(raw)
+	if err != nil {
+		return false
+	}
+	if strings.HasPrefix(mediaType, "video/") || strings.HasPrefix(mediaType, "audio/") {
+		return true
+	}
+	switch mediaType {
+	case "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif", "image/bmp", "image/x-icon", "image/vnd.microsoft.icon", "image/heic", "image/heif", "application/pdf", "text/plain":
+		return true
+	default:
+		return false
 	}
 }

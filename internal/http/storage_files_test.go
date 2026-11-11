@@ -14,6 +14,7 @@ import (
 type filesStub struct {
 	previewStub
 	root, path, method, operation string
+	mimeType                      string
 	headers                       map[string]string
 }
 
@@ -27,7 +28,11 @@ func (s *filesStub) OpenStorageFile(_ context.Context, _ domain.Node, root, path
 	s.path = path
 	s.method = method
 	s.headers = headers
-	return &http.Response{StatusCode: 206, Header: http.Header{"Content-Type": {"video/mp4"}, "Content-Range": {"bytes 2-5/10"}, "Content-Disposition": {"inline; filename=lesson.mp4"}}, Body: io.NopCloser(strings.NewReader("2345"))}, nil
+	mediaType := s.mimeType
+	if mediaType == "" {
+		mediaType = "video/mp4"
+	}
+	return &http.Response{StatusCode: 206, Header: http.Header{"Content-Type": {mediaType}, "Content-Range": {"bytes 2-5/10"}, "Content-Disposition": {"inline; filename=lesson.mp4"}}, Body: io.NopCloser(strings.NewReader("2345"))}, nil
 }
 func (s *filesStub) MutateStorage(_ context.Context, _ domain.Node, operation string, request domain.StorageFileMutation) (domain.StorageFileMutationResult, error) {
 	s.operation = operation
@@ -54,6 +59,34 @@ func TestFileManagerProxiesPathsRangesAndHeadWithoutBuffering(t *testing.T) {
 		}
 		if method == "GET" && w.Body.String() != "2345" {
 			t.Fatal("stream changed")
+		}
+		if !strings.HasPrefix(w.Header().Get("Content-Disposition"), "inline;") {
+			t.Fatal("safe media preview became download")
+		}
+	}
+}
+func TestStorageFilesForceActiveDocumentsToAttachmentEvenIfNodeRequestsInline(t *testing.T) {
+	client := &filesStub{}
+	handler := NewHandler(Dependencies{NodeRepo: networkRepo{}, NodeClient: client})
+	for _, mediaType := range []string{"text/html", "image/svg+xml", "image/svg+xml; charset=utf-8", "application/xhtml+xml", "application/javascript", "image/x-svg+xml"} {
+		client.mimeType = mediaType
+		for _, method := range []string{"GET", "HEAD"} {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(method, "/api/ui/nodes/test/files/content?path=payload.svg&inline=1", nil))
+			if !strings.HasPrefix(w.Header().Get("Content-Disposition"), "attachment;") {
+				t.Fatalf("%s was inlined", mediaType)
+			}
+			if w.Header().Get("Content-Security-Policy") != "sandbox; default-src 'none'" || w.Header().Get("X-Content-Type-Options") != "nosniff" {
+				t.Fatal("document protections not forwarded")
+			}
+			if method == "HEAD" && w.Body.Len() != 0 {
+				t.Fatal("HEAD body returned")
+			}
+		}
+	}
+	for _, mediaType := range []string{"image/png", "video/mp4", "audio/mpeg"} {
+		if !storageInlineType(mediaType) {
+			t.Fatalf("safe preview disabled %s", mediaType)
 		}
 	}
 }
