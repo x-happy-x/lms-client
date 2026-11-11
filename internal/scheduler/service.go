@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"lms-router-control-plane/internal/domain"
@@ -13,6 +14,7 @@ import (
 )
 
 type Service struct {
+	mutationMu sync.Mutex
 	jobRepo    domain.JobRepository
 	nodeRepo   domain.NodeRepository
 	nodeClient domain.NodeClient
@@ -64,6 +66,8 @@ func (s *Service) Run(ctx context.Context) error {
 }
 
 func (s *Service) tick(ctx context.Context) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	if err := s.dispatchQueued(ctx); err != nil {
 		return fmt.Errorf("dispatch queued: %w", err)
 	}

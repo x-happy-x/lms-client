@@ -21,19 +21,21 @@ type NodeJobCreateResponse struct {
 }
 
 type NodeJobStatusResponse struct {
-	JobID           string   `json:"jobId"`
-	Type            string   `json:"type"`
-	URL             string   `json:"url"`
-	Status          string   `json:"status"`
-	Percent         *float64 `json:"percent"`
-	TotalBytes      *int64   `json:"totalBytes"`
-	SpeedBytes      *int64   `json:"speedBytes"`
-	ETASeconds      *int64   `json:"etaSeconds"`
-	Message         *string  `json:"message"`
-	StartedAt       *string  `json:"startedAt"`
-	FinishedAt      *string  `json:"finishedAt"`
-	OutputPath      *string  `json:"outputPath"`
-	OutputSizeBytes *int64   `json:"outputSizeBytes"`
+	NetworkRouteID    string   `json:"networkRouteId"`
+	NetworkRouteLabel string   `json:"networkRouteLabel"`
+	JobID             string   `json:"jobId"`
+	Type              string   `json:"type"`
+	URL               string   `json:"url"`
+	Status            string   `json:"status"`
+	Percent           *float64 `json:"percent"`
+	TotalBytes        *int64   `json:"totalBytes"`
+	SpeedBytes        *int64   `json:"speedBytes"`
+	ETASeconds        *int64   `json:"etaSeconds"`
+	Message           *string  `json:"message"`
+	StartedAt         *string  `json:"startedAt"`
+	FinishedAt        *string  `json:"finishedAt"`
+	OutputPath        *string  `json:"outputPath"`
+	OutputSizeBytes   *int64   `json:"outputSizeBytes"`
 }
 
 type NodeStorageTarget struct {

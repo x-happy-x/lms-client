@@ -87,6 +87,7 @@ export const api = {
   retryJob: (id: string) => post<Job>(`/jobs/${id}/retry`),
   setJobSpeed: (id: string, maxSpeedBytes: number | null) =>
     post<Job>(`/jobs/${id}/speed`, { maxSpeedBytes }),
+  setJobNetworkRoute: (id: string, networkRouteId: string) => post<Job>(`/jobs/${encodeURIComponent(id)}/network`, {networkRouteId}),
   updateJobUrl: (id: string, url: string) => post<Job>(`/jobs/${id}/url`, { url }),
   moveJob: (id: string, payload: { targetNodeId?: string; storagePath?: string }) =>
     post<Job>(`/jobs/${id}/move`, payload),

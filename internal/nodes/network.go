@@ -27,3 +27,8 @@ func (c *Client) ExtractMediaWithRoute(ctx context.Context, node domain.Node, ur
 	err := c.mediaJSON(ctx, node, "/api/jobs/extract", map[string]string{"url": url, "impersonate": profile, "networkRouteId": routeID}, &result)
 	return result, err
 }
+func (c *Client) SetNetworkRoute(ctx context.Context, node domain.Node, remoteID, routeID string) (domain.NodeJobStatusResponse, error) {
+	var result domain.NodeJobStatusResponse
+	err := c.callJSON(ctx, node, http.MethodPost, "/api/jobs/"+remoteID+"/network", map[string]string{"networkRouteId": routeID}, &result)
+	return result, err
+}
