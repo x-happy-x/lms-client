@@ -5,7 +5,8 @@ import type {
   NodeItem,
   Profile,
   StorageEstimateResponse,
-  StorageTargetsResponse
+  StorageTargetsResponse,
+  StorageFileListing
 } from './types'
 
 const BASE = '/api/ui'
@@ -98,7 +99,20 @@ export const api = {
     return request<StorageTargetsResponse>(`/nodes/${nodeId}/storage/targets${suffix}`)
   },
   estimateNodeStorage: (nodeId: string, payload: { type: string; url: string }) =>
-    post<StorageEstimateResponse>(`/nodes/${nodeId}/storage/estimate`, payload)
+    post<StorageEstimateResponse>(`/nodes/${nodeId}/storage/estimate`, payload),
+  browseFiles: (nodeId: string, root: string, path: string) => request<StorageFileListing>(`/nodes/${encodeURIComponent(nodeId)}/files?${new URLSearchParams({ root, path })}`),
+  mutateFile: (nodeId: string, operation: 'mkdir' | 'rename' | 'delete', payload: { root: string; path: string; name?: string }) =>
+    post<{ path: string }>(`/nodes/${encodeURIComponent(nodeId)}/files/${operation}`, payload),
+  fileAccess: async () => {
+    const config = await request<{ enabled: boolean }>('/auth/config')
+    if (!config.enabled) return true
+    const session = await request<{ user?: { role?: string } }>('/auth/session')
+    return ['admin', 'editor'].includes(session.user?.role || '')
+  }
+}
+
+export function storageFileUrl(nodeId: string, root: string, path: string, inline = false): string {
+  return `${BASE}/nodes/${encodeURIComponent(nodeId)}/files/content?${new URLSearchParams({ root, path, ...(inline ? { inline: '1' } : {}) })}`
 }
 
 /** Download URL of a job's output (streamed from the node through the router). */
