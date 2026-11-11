@@ -176,7 +176,7 @@ body.popup { width: 520px; max-height: 600px; padding: 12px; }
 .entry .chip-toggle { min-height: 27px; padding: 3px 8px; font-size: 11px; }
 .empty-state { display: grid; justify-items: center; gap: 10px; padding: 30px 18px; text-align: center; }
 .empty-state > span { color: var(--muted); }
-.empty-state .ui-icon { width: 30px; height: 30px; stroke-width: 1.4; }
+.empty-state > span .ui-icon { width: 30px; height: 30px; stroke-width: 1.4; }
 .empty-state strong { font-size: 13px; font-weight: 600; }
 .empty-state p { margin: 0; max-width: 310px; font-size: 12px; }
 .quick-add { margin-top: 10px; }

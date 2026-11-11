@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from './lib/router.js'
 import { initDownloadPreferences, videoOptions } from './lib/preferences.js'
 import { initAccountUI } from './lib/account-ui.js'
 import { isVkMedia, canonicalVideoPage } from './lib/media-source.js'
+import { createExtractSearch } from './lib/extract-search.js'
 
 const KIND_LABEL = {
   video: 'Видео',
@@ -29,7 +30,7 @@ const $ = (id) => document.getElementById(id)
 let settings = { ...DEFAULT_SETTINGS }
 const itemRows = new Map()
 const videoRows = new Map()
-let onPlaylistActivate = () => {}
+let onPlaylistActivate = () => { $('playlist-empty-text').textContent = 'Подготавливаем поиск…' }
 let extractGeneration = 0
 let currentPageUrl = ''
 let sourceTabId
@@ -493,20 +494,28 @@ async function runExtract(tabId, url, force = false, activate = false) {
   button.setAttribute('aria-busy', 'true')
   feedback.className = 'result muted'
   feedback.textContent = 'Ищем видео и плейлист…'
+  $('playlist-search').disabled = true
+  if ($('tab-playlist').getAttribute('aria-selected') === 'true') {
+    $('playlist-empty-text').textContent = 'Ищем плейлист этой страницы…'
+  }
   let answer
   try { answer = await chrome.runtime.sendMessage({ type: 'extract', tabId, url, force }) }
   catch (error) { answer = { error: error.message } }
-  if (generation !== extractGeneration) return
+  if (generation !== extractGeneration) return false
   button.disabled = false
   button.replaceChildren(icon('search'))
   button.setAttribute('aria-busy', 'false')
+  $('playlist-search').disabled = false
   if (answer?.ok) {
     feedback.textContent = ''
     renderExtract(answer.result, answer.videos)
     if (activate) selectTab(answer.result.kind === 'playlist' ? 'playlist' : 'page')
+    return true
   } else {
     feedback.className = 'result error'
     feedback.textContent = answer?.error || 'Не удалось найти видео'
+    $('playlist-empty-text').textContent = `Не удалось получить плейлист: ${feedback.textContent}`
+    return false
   }
 }
 
@@ -583,22 +592,24 @@ async function init() {
   const extractButton = $('extract')
   const canExtract = () => isHttp(pageUrl) && Boolean(normalizeRouterUrl(settings.routerUrl))
   extractButton.disabled = !canExtract()
-  let extracted = false
+  const playlistActive = () => $('tab-playlist').getAttribute('aria-selected') === 'true'
+  const search = createExtractSearch((url, { force, activate }) => runExtract(tab?.id, url, force, activate))
+  const searchPage = (url, options) => {
+    if (canExtract()) return search.request(url, options)
+    $('playlist-empty-text').textContent = 'Укажите адрес LMS в настройках и откройте HTTP(S)-страницу.'
+    return Promise.resolve(false)
+  }
   extractButton.addEventListener('click', () => {
-    void runExtract(tab?.id, mediaSourceUrl, extracted, true)
-    extracted = true
+    void searchPage(playlistActive() ? pageUrl : mediaSourceUrl, { force: true, activate: !playlistActive() })
   })
   onPlaylistActivate = () => {
-    if (!extracted && canExtract() && !extractButton.disabled) {
-      extracted = true
-      void runExtract(tab?.id, mediaSourceUrl)
-    }
+    void searchPage(pageUrl)
   }
+  $('playlist-search').disabled = false
+  $('playlist-search').addEventListener('click', () => { void searchPage(pageUrl, { force: true }) })
   // Video sites are what yt-dlp is for: look right away (the worker caches the answer).
-  if (canExtract() && data?.videoHost) {
-    extracted = true
-    void runExtract(tab?.id, mediaSourceUrl)
-  }
+  if (playlistActive()) onPlaylistActivate()
+  else if (canExtract() && data?.videoHost) void searchPage(mediaSourceUrl)
 
   const quickStatus = el('div', { className: 'result' })
   $('quick').after(quickStatus)
@@ -615,7 +626,7 @@ async function init() {
     mediaOverrides.clear()
     if (['videoImpersonate','downloadNodeId'].includes(key)) {
       $('extract-feedback').textContent = ''
-      if (canExtract()) { extracted = true; void runExtract(tab?.id, mediaSourceUrl, true) }
+      void searchPage(playlistActive() ? pageUrl : mediaSourceUrl, { force: true })
     }
     for (const row of document.querySelectorAll('[data-media-page]')) infoObserver.observe(row)
     if (!Object.keys(videoOptions(settings)).length) return
@@ -641,7 +652,7 @@ async function init() {
       $('playlist-empty').hidden = false
       $('playlist-empty-text').textContent = 'Откройте страницу с плейлистом. Здесь появятся его ролики и превью.'
       $('extract-feedback').textContent = ''
-      extracted = false
+      search.invalidate()
       extractButton.replaceChildren(icon('search'))
       extractButton.setAttribute('aria-busy', 'false')
       extractButton.disabled = !isHttp(pageUrl) || !normalizeRouterUrl(settings.routerUrl)
@@ -650,12 +661,14 @@ async function init() {
     if (latest.title) $('page-title').textContent = latest.title
     renderVideoCards(latest.videos || [], latest.currentVideo)
     renderItems(latest.items || [], latest.hiddenCount || 0)
-    if (latest.mediaSourceUrl && (mediaSourceUrl !== previousSource || (!extracted && latest.videoHost)) && canExtract()) { extracted = true; void runExtract(tab?.id, mediaSourceUrl) }
+    if (playlistActive()) { if (!search.has(pageUrl)) void searchPage(pageUrl) }
+    else if (latest.mediaSourceUrl && (mediaSourceUrl !== previousSource || (!search.has(mediaSourceUrl) && latest.videoHost)) && canExtract()) void searchPage(mediaSourceUrl)
   }
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'accountChanged') {
       latestJobs = []; paintProgress(); infoCache.clear(); mediaOverrides.clear(); infoGeneration++; infoQueue.length = 0
-      $('ytdlp').replaceChildren(); renderVideoCards(); extracted = false
+      $('ytdlp').replaceChildren(); renderVideoCards(); search.invalidate()
+      if (playlistActive()) onPlaylistActivate()
       void checkRouter(); void pollProgress(); return
     }
     if (message?.type === 'jobsChanged') { void pollProgress(); return }
