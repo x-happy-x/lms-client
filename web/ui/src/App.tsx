@@ -9,6 +9,7 @@ import type { JobActions } from './components/jobs/JobItem'
 import { MediaPage } from './components/media/MediaPage'
 import { MediaViewer } from './components/media/MediaViewer'
 import { NodesPage } from './components/nodes/NodesPage'
+import { NetworkPage } from './components/network/NetworkPage'
 import { ProfilesPage } from './components/profiles/ProfilesPage'
 import { SettingsPage } from './components/settings/SettingsPage'
 import { useNewDownloadFlow } from './hooks/useNewDownloadFlow'
@@ -25,6 +26,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: IconName; desktopOnly?: bo
   { key: 'files', label: 'Файлы', icon: 'folder', primary: true },
   { key: 'media', label: 'Медиа', icon: 'image', primary: true },
   { key: 'nodes', label: 'Ноды', icon: 'server' },
+  { key: 'network', label: 'HomeNet', icon: 'link' },
   { key: 'profiles', label: 'Профили', icon: 'profile' },
   { key: 'extension', label: 'Расширение', icon: 'puzzle', desktopOnly: true },
   { key: 'settings', label: 'Настройки', icon: 'settings' }
@@ -94,6 +96,7 @@ export default function App() {
   const nextTheme = prefs.theme === 'system' ? 'light' : prefs.theme === 'light' ? 'dark' : 'system'
   const themeLabel = prefs.theme === 'system' ? 'Системная тема' : prefs.theme === 'light' ? 'Светлая тема' : 'Тёмная тема'
   const descriptions: Partial<Record<TabKey, string>> = {
+    network: 'Маршруты загрузок и подтверждённые соединения',
     jobs: 'Файлы, видео и плейлисты', files: 'Папки и файлы на ваших нодах', media: 'Готовые фото и видео', nodes: 'Устройства и хранилища',
     profiles: 'Параметры ваших загрузок', extension: 'Сохраняйте прямо из браузера', settings: 'Настройте LMS под себя'
   }
@@ -188,6 +191,7 @@ export default function App() {
           ) : null}
           {tab === 'files' ? <FilesPage nodes={nodes} onChanged={refreshJobs} /> : null}
           {tab === 'media' ? <MediaPage jobs={jobs} search={search} onOpen={(list, index) => setViewer({ list, index })} /> : null}
+          {tab === 'network' ? <NetworkPage nodes={nodes} /> : null}
           {tab === 'nodes' ? <NodesPage nodes={nodes} onRefresh={refreshNodes} /> : null}
           {tab === 'profiles' ? <ProfilesPage profiles={profiles} onRefresh={refreshProfiles} /> : null}
           {tab === 'extension' ? <ExtensionPage /> : null}
