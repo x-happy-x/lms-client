@@ -41,6 +41,8 @@ export function RouteSelector({ nodeId, url, type, value, onChange }: {nodeId: s
 
 export function JobNetworkRoute({ job }: { job: Job }) {
   const [open, setOpen] = useState(false)
+  const [canEdit, setCanEdit] = useState(false)
+  useEffect(() => { if (open) void api.fileAccess().then(setCanEdit).catch(() => setCanEdit(false)) }, [open])
   const [applied, setApplied] = useState(job)
   const [selected, setSelected] = useState(job.networkRouteId || '')
   const [busy, setBusy] = useState(false), [mutationError, setMutationError] = useState('')
@@ -56,7 +58,7 @@ export function JobNetworkRoute({ job }: { job: Job }) {
   return <details className="job-network-route" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary><Icon name="link" size={13} />{applied.networkRouteLabel || 'Маршрут сети'}<Icon name="chevronRight" size={13} /></summary>
     <div className="job-network-body">{loading ? 'Получаем текущий путь…' : error || (data ? <><strong>{data.planned.label}</strong>{data.observed.length ? data.observed.map((item, index) => <p key={index}>{item.host}: {item.chains.join(' → ')}</p>) : <p>Текущий путь не подтверждён: совпавших активных соединений нет.</p>}{data.message ? <p>{data.message}</p> : null}
-      {!['DONE','CANCELED'].includes(applied.status) ? <div className="job-network-change"><label className="field"><span>Сменить маршрут</span><select value={selected} onChange={event => setSelected(event.target.value)} disabled={busy}><option value="">Автоматически · правила сети</option>{data.routes.filter(route => route.available && route.supportedTypes.includes(applied.type)).map(route => <option key={route.id} value={route.id}>{route.label}</option>)}{selected && !data.routes.some(route => route.id === selected) ? <option value={selected} disabled>Выбранный маршрут недоступен</option> : null}</select></label><button className="btn" type="button" onClick={() => void apply()} disabled={busy || selected === (applied.networkRouteId || '')}>{busy ? 'Применяем…' : 'Применить'}</button><p className="muted small">{applied.status === 'PAUSED' ? 'Загрузка останется на паузе.' : applied.status === 'ERROR' ? 'Маршрут будет использован при следующем повторе загрузки.' : 'Загрузка продолжится с сохранённого места.'}</p></div> : null}
+      {canEdit && ['DIRECT','YTDLP','ARIA2C'].includes(applied.type) && !['DONE','CANCELED'].includes(applied.status) ? <div className="job-network-change"><label className="field"><span>Сменить маршрут</span><select aria-label="Сменить маршрут" value={selected} onChange={event => setSelected(event.target.value)} disabled={busy}><option value="">Автоматически · правила сети</option>{data.routes.filter(route => route.available && route.supportedTypes.includes(applied.type)).map(route => <option key={route.id} value={route.id}>{route.label}</option>)}{selected && !data.routes.some(route => route.id === selected) ? <option value={selected} disabled>Выбранный маршрут недоступен</option> : null}</select></label><button className="btn" type="button" onClick={() => void apply()} disabled={busy || selected === (applied.networkRouteId || '')}>{busy ? 'Применяем…' : 'Применить'}</button><p className="muted small">{applied.status === 'PAUSED' ? 'Загрузка останется на паузе.' : applied.status === 'ERROR' ? 'Маршрут будет использован при следующем повторе загрузки.' : 'Загрузка продолжится с сохранённого места.'}</p></div> : null}
       </> : null)}{mutationError ? <p className="error" role="alert">{mutationError}</p> : null}</div>
   </details>
 }
