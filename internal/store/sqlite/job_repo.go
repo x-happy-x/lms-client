@@ -23,8 +23,8 @@ func (r *JobRepository) Create(ctx context.Context, job domain.Job) error {
 		INSERT INTO jobs (
 			id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json, network_route_id, network_route_label
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		job.ID,
 		job.CreatedAt.UTC().Format(timeLayoutRFC3339()),
@@ -49,6 +49,8 @@ func (r *JobRepository) Create(ctx context.Context, job domain.Job) error {
 		job.MaxSpeedBytes,
 		encodeYtdlpOptions(job.YtdlpOptions),
 		encodePlaylist(job.Playlist),
+		job.NetworkRouteID,
+		job.NetworkRouteLabel,
 	)
 	if err != nil {
 		return fmt.Errorf("insert job: %w", err)
@@ -60,7 +62,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id string) (domain.Job, err
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json, network_route_id, network_route_label
 		FROM jobs
 		WHERE id = ?
 	`, id)
@@ -79,7 +81,7 @@ func (r *JobRepository) List(ctx context.Context, activeOnly bool) ([]domain.Job
 	query := `
 		SELECT id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json, network_route_id, network_route_label
 		FROM jobs
 	`
 	args := make([]any, 0)
@@ -131,7 +133,9 @@ func (r *JobRepository) Update(ctx context.Context, job domain.Job) error {
 			error_text = ?,
 			max_speed_bytes = ?,
 			ytdlp_options = ?,
-			playlist_json = ?
+			playlist_json = ?,
+ network_route_id = ?,
+ network_route_label = ?
 		WHERE id = ?
 	`,
 		job.UpdatedAt.UTC().Format(timeLayoutRFC3339()),
@@ -155,6 +159,8 @@ func (r *JobRepository) Update(ctx context.Context, job domain.Job) error {
 		job.MaxSpeedBytes,
 		encodeYtdlpOptions(job.YtdlpOptions),
 		encodePlaylist(job.Playlist),
+		job.NetworkRouteID,
+		job.NetworkRouteLabel,
 		job.ID,
 	)
 	if err != nil {
@@ -176,24 +182,25 @@ type scanner interface {
 
 func scanJob(s scanner) (domain.Job, error) {
 	var (
-		job                          domain.Job
-		createdAtRaw, updatedAtRaw   string
-		typeRaw, statusRaw           string
-		profileIDRaw, nodeIDRaw      sql.NullString
-		storagePathRaw               sql.NullString
-		remoteJobIDRaw               sql.NullString
-		percentRaw                   sql.NullFloat64
-		totalBytesRaw                sql.NullInt64
-		speedBytesRaw, etaSecondsRaw sql.NullInt64
-		messageRaw                   sql.NullString
-		startedAtRaw                 sql.NullString
-		finishedAtRaw                sql.NullString
-		outputPathRaw                sql.NullString
-		outputSizeBytesRaw           sql.NullInt64
-		errorTextRaw                 sql.NullString
-		maxSpeedBytesRaw             sql.NullInt64
-		ytdlpOptionsRaw              sql.NullString
-		playlistRaw                  sql.NullString
+		job                                     domain.Job
+		createdAtRaw, updatedAtRaw              string
+		typeRaw, statusRaw                      string
+		profileIDRaw, nodeIDRaw                 sql.NullString
+		storagePathRaw                          sql.NullString
+		remoteJobIDRaw                          sql.NullString
+		percentRaw                              sql.NullFloat64
+		totalBytesRaw                           sql.NullInt64
+		speedBytesRaw, etaSecondsRaw            sql.NullInt64
+		messageRaw                              sql.NullString
+		startedAtRaw                            sql.NullString
+		finishedAtRaw                           sql.NullString
+		outputPathRaw                           sql.NullString
+		outputSizeBytesRaw                      sql.NullInt64
+		errorTextRaw                            sql.NullString
+		maxSpeedBytesRaw                        sql.NullInt64
+		ytdlpOptionsRaw                         sql.NullString
+		playlistRaw                             sql.NullString
+		networkRouteIDRaw, networkRouteLabelRaw sql.NullString
 	)
 	if err := s.Scan(
 		&job.ID,
@@ -219,6 +226,8 @@ func scanJob(s scanner) (domain.Job, error) {
 		&maxSpeedBytesRaw,
 		&ytdlpOptionsRaw,
 		&playlistRaw,
+		&networkRouteIDRaw,
+		&networkRouteLabelRaw,
 	); err != nil {
 		return domain.Job{}, fmt.Errorf("scan job: %w", err)
 	}
@@ -240,6 +249,8 @@ func scanJob(s scanner) (domain.Job, error) {
 	job.NodeID = stringPtrFromNull(nodeIDRaw)
 	job.StoragePath = stringPtrFromNull(storagePathRaw)
 	job.RemoteJobID = stringPtrFromNull(remoteJobIDRaw)
+	job.NetworkRouteID = networkRouteIDRaw.String
+	job.NetworkRouteLabel = networkRouteLabelRaw.String
 	job.Percent = float64PtrFromNull(percentRaw)
 	job.TotalBytes = int64PtrFromNull(totalBytesRaw)
 	job.SpeedBytes = int64PtrFromNull(speedBytesRaw)

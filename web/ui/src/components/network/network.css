@@ -1,0 +1,29 @@
+.network-page { display:grid; gap:22px; max-width:1100px; }
+.network-heading,.network-summary,.network-route { display:flex; align-items:center; gap:16px; }
+.network-heading { justify-content:space-between; }
+.network-heading h2 { margin:0 0 7px; font-size:26px; letter-spacing:-.6px; }
+.network-heading p { margin:0; }
+.network-eyebrow { color:var(--accent); text-transform:uppercase; font-size:10px; font-weight:750; letter-spacing:1.8px; margin-bottom:9px!important; }
+.network-controls { display:grid; grid-template-columns:minmax(180px,1fr) minmax(220px,2fr); gap:16px; }
+.network-summary,.network-route,.network-observed,.network-selector { padding:20px; background:var(--surface); border:1px solid var(--border); border-radius:18px; }
+.network-summary > div,.network-route > div { flex:1; min-width:0; }
+.network-summary p,.network-route p { margin:6px 0 0; }
+.network-routes { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:12px; }
+.network-route { padding:16px; }
+.network-route-icon { display:grid; place-items:center; width:44px; height:44px; flex:none; border-radius:14px; background:color-mix(in srgb,var(--accent) 10%,var(--surface)); color:var(--accent); }
+.network-observed h3 { margin:0 0 8px; }
+.network-connection { padding:18px 0; border-top:1px solid var(--border); overflow-wrap:anywhere; }
+.network-connection:first-of-type { margin-top:16px; }
+.network-chain,.network-chain span { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.network-chain { margin:9px 0; }
+.network-chain span { font-size:12px; color:var(--muted); }
+.network-empty { padding:32px 12px; }
+.network-selector .field > span { display:flex; align-items:center; gap:8px; }
+.network-selector p:last-child { margin-bottom:0; }
+.job-network-route { margin-top:8px; font-size:11px; color:var(--muted); }
+.job-network-route summary { display:inline-flex; align-items:center; gap:6px; cursor:pointer; list-style:none; }
+.job-network-route summary::-webkit-details-marker { display:none; }
+.job-network-route[open] summary > svg:last-child { transform:rotate(90deg); }
+.job-network-body { margin-top:8px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); overflow-wrap:anywhere; line-height:1.6; }
+.job-network-body p { margin:4px 0; }
+@media(max-width:600px) { .network-controls { grid-template-columns:1fr; } .network-summary { align-items:flex-start; flex-wrap:wrap; } .network-page { gap:16px; } .network-observed,.network-selector { padding:16px; } }

@@ -20,13 +20,13 @@ export function PlaylistInspector({ value, onChange }: { value: NewJobFormState;
     setLoading(true); setError('')
     onChange({ ...current.current, mediaLoading: true })
     const timer = window.setTimeout(() => {
-      api.extractMedia({ url: value.url.trim(), nodeId: value.nodeId }).then(result => {
+      api.extractMedia({ url: value.url.trim(), nodeId: value.nodeId, networkRouteId: value.networkRouteId || undefined }).then(result => {
         if (!active) return
         onChange({ ...current.current, media: result, playlistId: crypto.randomUUID(), selectedEntries: undefined, mediaLoading: false })
       }, reason => { if (active) { setError(reason.message); onChange({ ...current.current, mediaLoading: false }) } }).finally(() => { if (active) setLoading(false) })
     }, 500)
     return () => { active = false; clearTimeout(timer) }
-  }, [value.type, value.url, value.nodeId, retry])
+  }, [value.type, value.url, value.nodeId, value.networkRouteId, retry])
   if (value.type !== 'YTDLP') return null
   const result = value.media, entries = result?.entries || [], selected = new Set(value.selectedEntries || [])
   const all = value.selectedEntries === undefined
@@ -45,9 +45,9 @@ export function PlaylistInspector({ value, onChange }: { value: NewJobFormState;
           <div className="playlist-source-summary"><div className="playlist-mini-stack">{result.thumbnail || entries[0]?.thumbnail ? <img src={result.thumbnail || entries[0].thumbnail} alt="" referrerPolicy="no-referrer" /> : <Icon name="layers" size={30} />}</div><div><strong>{result.title || 'Плейлист'}</strong><p className="muted">{result.entryCount ?? entries.length} роликов{result.truncated ? ' · показаны первые 300' : ''}</p></div></div>
           <div className="playlist-selection-bar"><button type="button" className={`playlist-chip${all ? ' selected' : ''}`} aria-pressed={all} onClick={() => onChange({ ...value, selectedEntries: undefined })}>Весь плейлист</button><button type="button" className={`playlist-chip${!all ? ' selected' : ''}`} aria-pressed={!all} onClick={() => onChange({ ...value, selectedEntries: entries.map(entry => entry.url) })}>Выбрать ролики</button>{!all ? <button type="button" className="playlist-chip" onClick={() => onChange({ ...value, selectedEntries: selected.size ? [] : entries.map(entry => entry.url) })}>{selected.size ? 'Снять выбор' : 'Выбрать все'}</button> : null}</div>
           <p className="muted small">{all ? 'Одна загрузка, все ролики в отдельной папке.' : `Выбрано ${selected.size} из ${entries.length}. Каждый ролик — отдельная загрузка в одной стопке.`}</p>
-          <div className="playlist-preview-list">{entries.map((entry, index) => <PlaylistMedia key={entry.url} entry={entry} index={index + 1} nodeId={value.nodeId} maxHeight={value.maxHeight || undefined} selected={selected.has(entry.url)} onSelect={all ? undefined : () => { const next = new Set(selected); if (next.has(entry.url)) next.delete(entry.url); else next.add(entry.url); onChange({ ...value, selectedEntries: [...next] }) }} />)}</div>
+          <div className="playlist-preview-list">{entries.map((entry, index) => <PlaylistMedia key={entry.url} entry={entry} index={index + 1} nodeId={value.nodeId} networkRouteId={value.networkRouteId} maxHeight={value.maxHeight || undefined} selected={selected.has(entry.url)} onSelect={all ? undefined : () => { const next = new Set(selected); if (next.has(entry.url)) next.delete(entry.url); else next.add(entry.url); onChange({ ...value, selectedEntries: [...next] }) }} />)}</div>
           {!entries.length ? <p className="playlist-notice">Источник не вернул список роликов. Можно отправить весь плейлист.</p> : null}
-        </> : <PlaylistMedia entry={result} index={1} nodeId={value.nodeId} maxHeight={value.maxHeight || undefined} />
+        </> : <PlaylistMedia entry={result} index={1} nodeId={value.nodeId} networkRouteId={value.networkRouteId} maxHeight={value.maxHeight || undefined} />
       ) : null}
     </section>
   )

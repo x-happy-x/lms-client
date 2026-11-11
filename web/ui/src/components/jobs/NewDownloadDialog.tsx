@@ -1,3 +1,4 @@
+import { RouteSelector } from '../network/NetworkPage'
 import type { NewJobFormState } from '../../hooks/useNewDownloadFlow'
 import { extractLink } from '../../hooks/useNewDownloadFlow'
 import { formatBytes, typeLabel } from '../../lib/format'
@@ -178,6 +179,7 @@ export function NewDownloadDialog(props: Props) {
             ) : null}
           </>
         ) : null}
+        <RouteSelector nodeId={value.nodeId} url={value.url} type={value.type} value={value.networkRouteId} onChange={networkRouteId => onChange({ ...value, networkRouteId })} />
         <PlaylistInspector value={value} onChange={onChange} />
         {props.submitError ? <div className="alert error">{props.submitError}</div> : null}
       </div>

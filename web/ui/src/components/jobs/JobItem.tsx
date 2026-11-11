@@ -1,3 +1,4 @@
+import { JobNetworkRoute } from '../network/NetworkPage'
 import { fileUrl } from '../../api'
 import { isViewableMedia, kindLabel, kindOfJob } from '../../lib/fileKinds'
 import {
@@ -144,6 +145,7 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
             {job.status === 'DONE' && job.outputSizeBytes ? ` · ${formatBytes(job.outputSizeBytes)}` : ''}
           </div>
           {showProgress ? <div className="progress"><span style={{ width: `${progress}%` }} /></div> : null}
+          {job.nodeId ? <JobNetworkRoute job={job} /> : null}
         </div>
         <div className="tile-actions">
           <QuickActions job={job} actions={actions} />
@@ -173,6 +175,7 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
             <span key={part} className={part === formatDate(job.finishedAt ?? job.createdAt) ? 'meta-date' : undefined}>{part}</span>
           ))}
         </div>
+        {job.nodeId ? <JobNetworkRoute job={job} /> : null}
         {note ? <div className={`note${job.status === 'ERROR' ? ' error' : ''}`}>{note}</div> : null}
       </div>
       <div className="row-actions">

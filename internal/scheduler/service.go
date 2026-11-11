@@ -101,11 +101,12 @@ func (s *Service) dispatchQueued(ctx context.Context) error {
 		}
 
 		resp, err := s.nodeClient.CreateJob(ctx, node, domain.NodeJobCreateRequest{
-			Type:          string(job.Type),
-			URL:           job.URL,
-			StoragePath:   job.StoragePath,
-			MaxSpeedBytes: job.MaxSpeedBytes,
-			YtdlpOptions:  job.YtdlpOptions,
+			Type:           string(job.Type),
+			URL:            job.URL,
+			StoragePath:    job.StoragePath,
+			MaxSpeedBytes:  job.MaxSpeedBytes,
+			YtdlpOptions:   job.YtdlpOptions,
+			NetworkRouteID: job.NetworkRouteID,
 		})
 		if err != nil {
 			s.logger.Warn("dispatch failed", "job_id", job.ID, "node_id", node.ID, "error", err)

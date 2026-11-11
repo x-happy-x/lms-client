@@ -15,6 +15,13 @@ if [ -f /opt/routerd/config/account.env ]; then
     set +a
 fi
 
+# Installed separately; deployment preserves HomeNet integration credentials.
+if [ -f /opt/routerd/config/homenet.env ]; then
+    set -a
+    . /opt/routerd/config/homenet.env
+    set +a
+fi
+
 is_running() {
     if [ -f "$PIDFILE" ]; then
         PID="$(cat "$PIDFILE" 2>/dev/null)"

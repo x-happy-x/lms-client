@@ -9,13 +9,13 @@ let active = 0
 const queue: Array<() => void> = []
 function drain() { while (active < 2 && queue.length) queue.shift()?.() }
 const cache = new Map<string, MediaInfo>()
-function inspect(url: string, nodeId?: string, maxHeight?: number): Promise<MediaInfo> {
-  const key = `${url}\n${nodeId}\n${maxHeight}`
+function inspect(url: string, nodeId?: string, maxHeight?: number, networkRouteId?: string): Promise<MediaInfo> {
+  const key = `${url}\n${nodeId}\n${maxHeight}\n${networkRouteId}`
   if (cache.has(key)) return Promise.resolve(cache.get(key)!)
   return new Promise((resolve, reject) => {
     queue.push(() => {
       active++
-      api.mediaInfo({ url, nodeId, maxHeight }).then(result => {
+      api.mediaInfo({ url, nodeId, maxHeight, networkRouteId }).then(result => {
         cache.set(key, result)
         if (cache.size > 300) cache.delete(cache.keys().next().value!)
         resolve(result)
@@ -25,8 +25,8 @@ function inspect(url: string, nodeId?: string, maxHeight?: number): Promise<Medi
   })
 }
 
-export function PlaylistMedia({ entry, index, nodeId, maxHeight, selected, onSelect, action }: {
-  entry: MediaEntry; index: number; nodeId?: string; maxHeight?: number; selected?: boolean; onSelect?: () => void; action?: React.ReactNode
+export function PlaylistMedia({ entry, index, nodeId, maxHeight, networkRouteId, selected, onSelect, action }: {
+  entry: MediaEntry; index: number; nodeId?: string; maxHeight?: number; networkRouteId?: string; selected?: boolean; onSelect?: () => void; action?: React.ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
@@ -53,12 +53,12 @@ export function PlaylistMedia({ entry, index, nodeId, maxHeight, selected, onSel
     if (!visible) return
     let current = true
     setInfo(null); setError('')
-    inspect(entry.url, nodeId, maxHeight).then(result => { if (current) setInfo(result) }, reason => { if (current) setError(reason.message) })
+    inspect(entry.url, nodeId, maxHeight, networkRouteId).then(result => { if (current) setInfo(result) }, reason => { if (current) setError(reason.message) })
     return () => { current = false }
-  }, [visible, entry.url, nodeId, maxHeight])
+  }, [visible, entry.url, nodeId, maxHeight, networkRouteId])
   async function preview() {
     setPreviewBusy(true); setError('')
-    try { setStream((await api.prepareMedia({ url: entry.url, nodeId, maxHeight })).streamUrl) }
+    try { setStream((await api.prepareMedia({ url: entry.url, nodeId, maxHeight, networkRouteId })).streamUrl) }
     catch (reason) { setError((reason as Error).message) }
     finally { setPreviewBusy(false) }
   }

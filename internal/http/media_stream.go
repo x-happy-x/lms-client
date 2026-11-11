@@ -104,6 +104,10 @@ func (h *Handler) mediaStart(w http.ResponseWriter, r *http.Request, preview boo
 		h.badRequest(w, "Недопустимое качество")
 		return
 	}
+	if err := domain.ValidateNetworkRouteID(req.NetworkRouteID); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
 	if err := domain.ValidateImpersonation(req.Impersonate); err != nil {
 		h.badRequest(w, err.Error())
 		return
@@ -123,6 +127,10 @@ func (h *Handler) mediaStart(w http.ResponseWriter, r *http.Request, preview boo
 	node := candidates[0]
 	if !node.Enabled {
 		writeJSON(w, 409, map[string]string{"error": "Выбранная нода отключена"})
+		return
+	}
+	if _, err := h.checkNetworkRoute(ctx, &node.ID, req.NetworkRouteID, domain.JobTypeYTDLP); err != nil {
+		h.badRequest(w, err.Error())
 		return
 	}
 	if err := h.checkMediaProfile(ctx, node, req.Impersonate); err != nil {

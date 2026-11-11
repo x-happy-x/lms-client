@@ -1,5 +1,5 @@
 import type {
-  Job,
+  Job, NetworkRoutes,
   YtdlpOptions, PlaylistMetadata, MediaExtractResult, MediaInfo,
   JobPreflightResponse,
   NodeItem,
@@ -59,6 +59,7 @@ export type ProfilePayload = {
 }
 
 export type CreateJobPayload = {
+  networkRouteId?: string
   ytdlpOptions?: YtdlpOptions
   playlist?: PlaylistMetadata
   type: string
@@ -71,9 +72,10 @@ export type CreateJobPayload = {
 }
 
 export const api = {
-  extractMedia: (payload: {url: string; nodeId?: string; impersonate?: string}) => post<MediaExtractResult>('/media/extract', payload),
-  mediaInfo: (payload: {url: string; nodeId?: string; maxHeight?: number; maxFps?: number; impersonate?: string}) => post<MediaInfo>('/media/info', payload),
-  prepareMedia: (payload: {url: string; nodeId?: string; maxHeight?: number}) => post<{streamUrl: string}>('/media/preview', payload),
+  networkRoutes: (nodeId: string, url = "", networkRouteId = "") => request<NetworkRoutes>(`/network/routes?${new URLSearchParams({nodeId, ...(url ? {url} : {}), ...(networkRouteId ? {networkRouteId} : {})})}`),
+  extractMedia: (payload: {url: string; nodeId?: string; networkRouteId?: string; impersonate?: string}) => post<MediaExtractResult>('/media/extract', payload),
+  mediaInfo: (payload: {url: string; nodeId?: string; networkRouteId?: string; maxHeight?: number; maxFps?: number; impersonate?: string}) => post<MediaInfo>('/media/info', payload),
+  prepareMedia: (payload: {url: string; nodeId?: string; networkRouteId?: string; maxHeight?: number}) => post<{streamUrl: string}>('/media/preview', payload),
   health: () => request<{ status: string }>('/system/health'),
   version: () => request<{ version: string }>('/system/version'),
   getJobs: (active = false) => request<Job[]>(`/jobs?active=${active}`),

@@ -18,7 +18,7 @@ export function PlaylistStack({ jobs, nodeById, actions, layout }: { jobs: Job[]
     if (!open || loaded) return
     let active = true
     setLoading(true); setError('')
-    api.extractMedia({ url, nodeId: first.nodeId, impersonate: first.ytdlpOptions?.impersonate }).then(result => {
+    api.extractMedia({ url, nodeId: first.nodeId, impersonate: first.ytdlpOptions?.impersonate, networkRouteId: first.networkRouteId }).then(result => {
       if (!active) return
       if (result.kind !== 'playlist') throw new Error('Источник больше не возвращает плейлист. Задания сохранены.')
       setEntries(result.entries); setTitle(result.title || ''); setThumbnail(result.thumbnail || result.entries.find(entry => entry.thumbnail)?.thumbnail || ''); setCount(result.entryCount); setLoaded(true)
@@ -41,7 +41,7 @@ export function PlaylistStack({ jobs, nodeById, actions, layout }: { jobs: Job[]
         {whole ? <>
           <JobItem job={first} node={first.nodeId ? nodeById.get(first.nodeId) : undefined} actions={actions} layout="row" />
           <p className="muted small">Прогресс относится ко всему заданию. Отдельные статусы роликов источник не сообщает.</p>
-          <div className="playlist-preview-list">{entries.map((entry, index) => <PlaylistMedia key={entry.url} entry={entry} index={index + 1} nodeId={first.nodeId} maxHeight={first.ytdlpOptions?.maxHeight} />)}</div>
+          <div className="playlist-preview-list">{entries.map((entry, index) => <PlaylistMedia key={entry.url} entry={entry} index={index + 1} nodeId={first.nodeId} networkRouteId={first.networkRouteId} maxHeight={first.ytdlpOptions?.maxHeight} />)}</div>
           {!loading && !error && !entries.length ? <p className="muted">Список роликов недоступен. Загрузкой можно управлять выше.</p> : null}
         </> : jobs.map(job => {
           const entry = entries.find(entry => entry.url === job.url)
