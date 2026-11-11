@@ -1,4 +1,4 @@
-export type TabKey = 'jobs' | 'media' | 'nodes' | 'profiles' | 'extension' | 'settings'
+export type TabKey = 'jobs' | 'files' | 'media' | 'nodes' | 'profiles' | 'extension' | 'settings'
 export type ThemeMode = 'system' | 'light' | 'dark'
 
 export type StorageFileEntry = {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { ExtensionPage } from './components/extension/ExtensionPage'
+import { FilesPage } from './components/files/FilesPage'
 import { JobDialogsHost } from './components/jobs/JobDialogsHost'
 import { JobsPage } from './components/jobs/JobsPage'
 import { NewDownloadDialog } from './components/jobs/NewDownloadDialog'
@@ -21,8 +22,9 @@ import { Dialog } from './ui/Dialog'
 // desktopOnly: browser extensions are a desktop thing, so the phone bottom bar skips them.
 const TABS: Array<{ key: TabKey; label: string; icon: IconName; desktopOnly?: boolean; primary?: boolean }> = [
   { key: 'jobs', label: 'Загрузки', icon: 'download', primary: true },
+  { key: 'files', label: 'Файлы', icon: 'folder', primary: true },
   { key: 'media', label: 'Медиа', icon: 'image', primary: true },
-  { key: 'nodes', label: 'Ноды', icon: 'server', primary: true },
+  { key: 'nodes', label: 'Ноды', icon: 'server' },
   { key: 'profiles', label: 'Профили', icon: 'profile' },
   { key: 'extension', label: 'Расширение', icon: 'puzzle', desktopOnly: true },
   { key: 'settings', label: 'Настройки', icon: 'settings' }
@@ -92,7 +94,7 @@ export default function App() {
   const nextTheme = prefs.theme === 'system' ? 'light' : prefs.theme === 'light' ? 'dark' : 'system'
   const themeLabel = prefs.theme === 'system' ? 'Системная тема' : prefs.theme === 'light' ? 'Светлая тема' : 'Тёмная тема'
   const descriptions: Partial<Record<TabKey, string>> = {
-    jobs: 'Файлы, видео и плейлисты', media: 'Готовые фото и видео', nodes: 'Устройства и хранилища',
+    jobs: 'Файлы, видео и плейлисты', files: 'Папки и файлы на ваших нодах', media: 'Готовые фото и видео', nodes: 'Устройства и хранилища',
     profiles: 'Параметры ваших загрузок', extension: 'Сохраняйте прямо из браузера', settings: 'Настройте LMS под себя'
   }
 
@@ -184,6 +186,7 @@ export default function App() {
               onAdd={() => void newDownload.openModal()}
             />
           ) : null}
+          {tab === 'files' ? <FilesPage nodes={nodes} onChanged={refreshJobs} /> : null}
           {tab === 'media' ? <MediaPage jobs={jobs} search={search} onOpen={(list, index) => setViewer({ list, index })} /> : null}
           {tab === 'nodes' ? <NodesPage nodes={nodes} onRefresh={refreshNodes} /> : null}
           {tab === 'profiles' ? <ProfilesPage profiles={profiles} onRefresh={refreshProfiles} /> : null}
