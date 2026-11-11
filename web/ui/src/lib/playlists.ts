@@ -16,6 +16,6 @@ export function groupPlaylists(jobs: Job[]): JobStack[] {
 }
 
 export function playlistProgress(jobs: Job[]): number | undefined {
-  if (!jobs.length || jobs.every(job => job.percent == null && job.status !== 'DONE')) return undefined
+  if (!jobs.length || jobs.some(job => job.status !== 'DONE' && (typeof job.percent !== 'number' || !Number.isFinite(job.percent)))) return undefined
   return jobs.reduce((sum, job) => sum + (job.status === 'DONE' ? 100 : Math.max(0, Math.min(100, job.percent || 0))), 0) / jobs.length
 }

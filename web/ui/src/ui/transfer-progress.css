@@ -1,0 +1,22 @@
+.transfer-progress { display: grid; gap: 7px; min-width: 0; --transfer-color: var(--accent); }
+.transfer-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.2; }
+.transfer-progress-label > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.transfer-progress-label strong { flex: none; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 650; }
+.transfer-progress-track { position: relative; display: block; height: 10px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--transfer-color) 10%, var(--surface-3)); }
+.transfer-progress-fill { position: relative; display: block; height: 100%; width: var(--transfer-value); overflow: hidden; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--transfer-color) 75%, white), var(--transfer-color)); transition: width .65s cubic-bezier(.2,.7,.2,1); }
+.transfer-progress-wave { position: absolute; inset: -1px -32px auto; width: calc(100% + 64px); height: 12px; color: #ffffff6b; opacity: 0; pointer-events: none; }
+.transfer-progress.state-running:not(.is-unknown) .transfer-progress-wave { opacity: .8; animation: transfer-ripple 1.5s linear infinite; }
+.transfer-progress.state-paused { --transfer-color: var(--warn); }
+.transfer-progress.state-error { --transfer-color: var(--bad); }
+.transfer-progress.state-done { --transfer-color: var(--good); }
+.transfer-progress.state-queued, .transfer-progress.state-canceled { --transfer-color: var(--muted); }
+.transfer-progress.is-unknown .transfer-progress-fill { width: 0; }
+.transfer-progress.is-unknown.state-running .transfer-progress-fill { width: 34%; animation: transfer-unknown 1.9s cubic-bezier(.4,0,.2,1) infinite; }
+.transfer-progress.is-unknown .transfer-progress-label strong { color: var(--muted); font-size: 10px; font-weight: 500; }
+@keyframes transfer-ripple { to { transform: translateX(32px); } }
+@keyframes transfer-unknown { from { transform: translateX(-110%); } to { transform: translateX(400%); } }
+@media (prefers-reduced-motion: reduce) {
+  .transfer-progress-fill { transition: none; }
+  .transfer-progress-wave, .transfer-progress.is-unknown.state-running .transfer-progress-fill { animation: none !important; }
+  .transfer-progress.is-unknown.state-running .transfer-progress-fill { margin-left: 33%; transform: none; }
+}

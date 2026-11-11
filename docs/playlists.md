@@ -39,7 +39,7 @@ There may be at most 300 entries and 256 KiB of metadata. Titles are limited to
 Old jobs remain valid. Old whole-playlist jobs from the extension are recognized
 by `ytdlpOptions.playlist:true` and inspected lazily on expansion.
 
-Whole-playlist progress remains the node's overall job progress; the UI does not
+Whole-playlist percentage is yt-dlp's current-file/video progress, not aggregate playlist progress. The UI labels it accordingly and does not
 invent per-entry completion. Quality/size are fetched only for visible entries,
 at most two concurrent metadata requests, with a bounded in-memory cache.
 Entry previews use the existing LMS stream endpoint, with no download job.

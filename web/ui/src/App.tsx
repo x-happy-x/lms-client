@@ -99,38 +99,16 @@ export default function App() {
   }
 
   return (
-    <div className="shell">
+    <div className="shell sidebar-left">
       <a className="skip-link" href="#main-content">Перейти к содержимому</a>
-      <aside className="sidebar">
-        <div className="brand">
+        <header className="topbar">
+<div className="brand">
           <span className="brand-mark"><Icon name="download" size={18} /></span>
           <span>
             <strong>LMS</strong>
             <span className="muted small">ваше пространство</span>
           </span>
         </div>
-        <div className="nav-caption">Библиотека</div>
-        <nav className="nav" aria-label="Основная навигация">
-          {TABS.map((item) => (
-            <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} aria-current={tab === item.key ? 'page' : undefined} title={item.label} onClick={() => navigate(item.key)}>
-              <Icon name={item.icon} />
-              <span className="nav-label">{item.label}</span>
-              {item.key === 'jobs' && active > 0 ? <span className="count">{active}</span> : null}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-foot">
-          <span className={`status-dot ${online > 0 ? 'node-online' : 'node-offline'}`} />
-          <span className="small">
-            Нод в сети: {online} из {nodes.length}
-          </span>
-          <span className="muted small">v{version}</span>
-        </div>
-      </aside>
-
-      <div className="main">
-        <header className="topbar">
-          <div className="page-heading"><h1>{current.label}</h1><p>{descriptions[tab]}</p></div>
           {tab === 'jobs' || tab === 'media' ? (
             <label className="search">
               <Icon name="search" size={18} />
@@ -161,6 +139,28 @@ export default function App() {
             <span>Добавить</span>
           </button>
         </header>
+      <aside className="sidebar">
+        <div className="nav-caption">Библиотека</div>
+        <nav className="nav" aria-label="Основная навигация">
+          {TABS.map((item) => (
+            <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} aria-current={tab === item.key ? 'page' : undefined} title={item.label} onClick={() => navigate(item.key)}>
+              <Icon name={item.icon} />
+              <span className="nav-label">{item.label}</span>
+              {item.key === 'jobs' && active > 0 ? <span className="count">{active}</span> : null}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <span className={`status-dot ${online > 0 ? 'node-online' : 'node-offline'}`} />
+          <span className="small">
+            Нод в сети: {online} из {nodes.length}
+          </span>
+          <span className="muted small">v{version}</span>
+        </div>
+      </aside>
+
+      <div className="main">
+        <header className="panel-heading"><div className="page-heading"><h1>{current.label}</h1><p>{descriptions[tab]}</p></div><span className="panel-connection"><span className={`status-dot ${online > 0 ? 'node-online' : 'node-offline'}`} /><span>{online} из {nodes.length} нод в сети</span></span></header>
 
         {error ? (
           <div className="alert error banner" role="alert">
