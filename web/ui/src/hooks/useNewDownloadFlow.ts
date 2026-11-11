@@ -3,6 +3,7 @@ import { api } from '../api'
 import type { JobPreflightResponse, StorageTarget, MediaExtractResult, YtdlpOptions, PlaylistMetadata } from '../types'
 
 export type NewJobFormState = {
+  networkRouteId: string
   type: string
   url: string
   storagePath: string
@@ -24,6 +25,7 @@ type UseNewDownloadFlowParams = {
 }
 
 const INITIAL_FORM: NewJobFormState = {
+  networkRouteId: "",
   type: 'DIRECT',
   url: '',
   storagePath: '',
@@ -102,6 +104,8 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
   }
 
   const onChange = (next: NewJobFormState) => {
+    if (next.nodeId !== value.nodeId || next.type === "TORRENT") next = { ...next, networkRouteId: "" }
+    if (next.networkRouteId !== value.networkRouteId) next = { ...next, media: undefined, selectedEntries: undefined }
     if (next.url !== value.url) {
       setNodeSelectionTouched(false)
     }
@@ -199,6 +203,7 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
         ...(value.audioOnly ? { audioOnly: true } : {})
       }
       const base = {
+        networkRouteId: withOptional(value.networkRouteId),
         type: value.type,
         storagePath: withOptional(value.storagePath),
         nodeId: withOptional(value.nodeId),

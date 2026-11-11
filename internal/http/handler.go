@@ -32,6 +32,8 @@ type JobController interface {
 }
 
 type Dependencies struct {
+	HomeNetOrigin       string
+	HomeNetToken        string
 	AccountOrigin       string
 	AccountGatewayToken string
 	PublicOrigin        string
@@ -46,6 +48,8 @@ type Dependencies struct {
 }
 
 type Handler struct {
+	homeNetOrigin    string
+	homeNetToken     string
 	mediaGrants      *mediaGrants
 	accountProtected bool
 	db               *sql.DB
@@ -59,6 +63,7 @@ type Handler struct {
 }
 
 type createJobRequest struct {
+	NetworkRouteID   string               `json:"networkRouteId,omitempty"`
 	Playlist         *domain.JobPlaylist  `json:"playlist,omitempty"`
 	YtdlpOptions     *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
 	Type             string               `json:"type"`
@@ -87,6 +92,7 @@ type jobPreflightNodeOptionResponse struct {
 }
 
 type jobPreflightNodeResponse struct {
+	NetworkRoutesSupported        bool                             `json:"networkRoutesSupported"`
 	ImpersonationOptionsSupported bool                             `json:"impersonationOptionsSupported"`
 	AdvancedOptionsSupported      bool                             `json:"advancedOptionsSupported"`
 	YtdlpOptionsSupported         bool                             `json:"ytdlpOptionsSupported"`
@@ -152,29 +158,31 @@ type createProfileRequest struct {
 }
 
 type jobResponse struct {
-	Playlist        *domain.JobPlaylist  `json:"playlist,omitempty"`
-	YtdlpOptions    *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
-	ID              string               `json:"id"`
-	CreatedAt       string               `json:"createdAt"`
-	UpdatedAt       string               `json:"updatedAt"`
-	Type            string               `json:"type"`
-	URL             string               `json:"url"`
-	StoragePath     *string              `json:"storagePath,omitempty"`
-	ProfileID       *string              `json:"profileId,omitempty"`
-	NodeID          *string              `json:"nodeId,omitempty"`
-	Status          string               `json:"status"`
-	RemoteJobID     *string              `json:"remoteJobId,omitempty"`
-	Percent         *float64             `json:"percent,omitempty"`
-	TotalBytes      *int64               `json:"totalBytes,omitempty"`
-	SpeedBytes      *int64               `json:"speedBytes,omitempty"`
-	ETASeconds      *int64               `json:"etaSeconds,omitempty"`
-	Message         *string              `json:"message,omitempty"`
-	StartedAt       *string              `json:"startedAt,omitempty"`
-	FinishedAt      *string              `json:"finishedAt,omitempty"`
-	OutputPath      *string              `json:"outputPath,omitempty"`
-	OutputSizeBytes *int64               `json:"outputSizeBytes,omitempty"`
-	ErrorText       *string              `json:"errorText,omitempty"`
-	MaxSpeedBytes   *int64               `json:"maxSpeedBytes,omitempty"`
+	NetworkRouteID    string               `json:"networkRouteId,omitempty"`
+	NetworkRouteLabel string               `json:"networkRouteLabel,omitempty"`
+	Playlist          *domain.JobPlaylist  `json:"playlist,omitempty"`
+	YtdlpOptions      *domain.YtDlpOptions `json:"ytdlpOptions,omitempty"`
+	ID                string               `json:"id"`
+	CreatedAt         string               `json:"createdAt"`
+	UpdatedAt         string               `json:"updatedAt"`
+	Type              string               `json:"type"`
+	URL               string               `json:"url"`
+	StoragePath       *string              `json:"storagePath,omitempty"`
+	ProfileID         *string              `json:"profileId,omitempty"`
+	NodeID            *string              `json:"nodeId,omitempty"`
+	Status            string               `json:"status"`
+	RemoteJobID       *string              `json:"remoteJobId,omitempty"`
+	Percent           *float64             `json:"percent,omitempty"`
+	TotalBytes        *int64               `json:"totalBytes,omitempty"`
+	SpeedBytes        *int64               `json:"speedBytes,omitempty"`
+	ETASeconds        *int64               `json:"etaSeconds,omitempty"`
+	Message           *string              `json:"message,omitempty"`
+	StartedAt         *string              `json:"startedAt,omitempty"`
+	FinishedAt        *string              `json:"finishedAt,omitempty"`
+	OutputPath        *string              `json:"outputPath,omitempty"`
+	OutputSizeBytes   *int64               `json:"outputSizeBytes,omitempty"`
+	ErrorText         *string              `json:"errorText,omitempty"`
+	MaxSpeedBytes     *int64               `json:"maxSpeedBytes,omitempty"`
 }
 
 type nodeResponse struct {
@@ -238,6 +246,8 @@ func NewHandler(deps Dependencies) http.Handler {
 		profileRepo:      deps.ProfileRepo,
 		jobController:    deps.JobController,
 		nodeClient:       deps.NodeClient,
+		homeNetOrigin:    deps.HomeNetOrigin,
+		homeNetToken:     deps.HomeNetToken,
 		httpClient:       &http.Client{Timeout: 1500 * time.Millisecond},
 	}
 	mux := http.NewServeMux()
@@ -248,6 +258,7 @@ func NewHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/ui/media/info", h.mediaInspect)
 	mux.HandleFunc("/api/ui/media/preview", h.mediaPrepare)
 	mux.HandleFunc("/api/ui/media/capabilities", h.mediaCapabilities)
+	mux.HandleFunc("/api/ui/network/routes", h.networkRoutes)
 	mux.HandleFunc("/api/ui/media/diagnose", h.mediaDiagnose)
 	mux.HandleFunc("/api/ui/media/stream/", h.mediaStream)
 	mux.HandleFunc("/api/ui/jobs", h.jobsRoot)
@@ -354,6 +365,7 @@ func (h *Handler) preflightJob(w http.ResponseWriter, r *http.Request) {
 				item.SupportedTypes = resp.SupportedTypes
 				item.DefaultStoragePath = resp.DefaultStoragePath
 				item.YtdlpOptionsSupported = resp.YtdlpOptionsSupported
+				item.NetworkRoutesSupported = resp.NetworkRoutesSupported
 				item.AdvancedOptionsSupported = resp.AdvancedOptionsSupported
 				item.ImpersonationOptionsSupported = resp.ImpersonationOptionsSupported
 				for _, option := range resp.Options {
@@ -621,24 +633,31 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	routeLabel, routeErr := h.checkNetworkRoute(r.Context(), req.NodeID, req.NetworkRouteID, domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))))
+	if routeErr != nil {
+		h.badRequest(w, routeErr.Error())
+		return
+	}
 	now := time.Now().UTC()
 	status := domain.JobStatusQueued
 	if req.StartImmediately != nil && !*req.StartImmediately {
 		status = domain.JobStatusPaused
 	}
 	job := domain.Job{
-		ID:            uuid.NewString(),
-		CreatedAt:     now,
-		UpdatedAt:     now,
-		Type:          domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))),
-		URL:           strings.TrimSpace(req.URL),
-		StoragePath:   req.StoragePath,
-		ProfileID:     req.ProfileID,
-		NodeID:        req.NodeID,
-		Status:        status,
-		MaxSpeedBytes: maxSpeed,
-		YtdlpOptions:  req.YtdlpOptions,
-		Playlist:      req.Playlist,
+		ID:                uuid.NewString(),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		Type:              domain.JobType(strings.ToUpper(strings.TrimSpace(req.Type))),
+		URL:               strings.TrimSpace(req.URL),
+		StoragePath:       req.StoragePath,
+		ProfileID:         req.ProfileID,
+		NodeID:            req.NodeID,
+		Status:            status,
+		MaxSpeedBytes:     maxSpeed,
+		YtdlpOptions:      req.YtdlpOptions,
+		Playlist:          req.Playlist,
+		NetworkRouteID:    req.NetworkRouteID,
+		NetworkRouteLabel: routeLabel,
 	}
 
 	if err := h.jobRepo.Create(r.Context(), job); err != nil {
@@ -1236,29 +1255,31 @@ func toJobResponse(j domain.Job) jobResponse {
 		finishedAt = &s
 	}
 	return jobResponse{
-		ID:              j.ID,
-		CreatedAt:       j.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:       j.UpdatedAt.UTC().Format(time.RFC3339),
-		Type:            string(j.Type),
-		URL:             j.URL,
-		StoragePath:     j.StoragePath,
-		ProfileID:       j.ProfileID,
-		NodeID:          j.NodeID,
-		Status:          string(j.Status),
-		RemoteJobID:     j.RemoteJobID,
-		Percent:         j.Percent,
-		TotalBytes:      j.TotalBytes,
-		SpeedBytes:      j.SpeedBytes,
-		ETASeconds:      j.ETASeconds,
-		Message:         j.Message,
-		StartedAt:       startedAt,
-		FinishedAt:      finishedAt,
-		OutputPath:      j.OutputPath,
-		OutputSizeBytes: j.OutputSizeBytes,
-		MaxSpeedBytes:   j.MaxSpeedBytes,
-		YtdlpOptions:    j.YtdlpOptions,
-		Playlist:        j.Playlist,
-		ErrorText:       j.ErrorText,
+		ID:                j.ID,
+		CreatedAt:         j.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:         j.UpdatedAt.UTC().Format(time.RFC3339),
+		Type:              string(j.Type),
+		URL:               j.URL,
+		StoragePath:       j.StoragePath,
+		ProfileID:         j.ProfileID,
+		NodeID:            j.NodeID,
+		Status:            string(j.Status),
+		RemoteJobID:       j.RemoteJobID,
+		Percent:           j.Percent,
+		TotalBytes:        j.TotalBytes,
+		SpeedBytes:        j.SpeedBytes,
+		ETASeconds:        j.ETASeconds,
+		Message:           j.Message,
+		StartedAt:         startedAt,
+		FinishedAt:        finishedAt,
+		OutputPath:        j.OutputPath,
+		OutputSizeBytes:   j.OutputSizeBytes,
+		MaxSpeedBytes:     j.MaxSpeedBytes,
+		YtdlpOptions:      j.YtdlpOptions,
+		Playlist:          j.Playlist,
+		NetworkRouteID:    j.NetworkRouteID,
+		NetworkRouteLabel: j.NetworkRouteLabel,
+		ErrorText:         j.ErrorText,
 	}
 }
 

@@ -13,9 +13,10 @@ import (
 )
 
 type mediaExtractRequest struct {
-	Impersonate string  `json:"impersonate,omitempty"`
-	URL         string  `json:"url"`
-	NodeID      *string `json:"nodeId,omitempty"`
+	NetworkRouteID string  `json:"networkRouteId,omitempty"`
+	Impersonate    string  `json:"impersonate,omitempty"`
+	URL            string  `json:"url"`
+	NodeID         *string `json:"nodeId,omitempty"`
 }
 
 type mediaExtractResponse struct {
@@ -71,7 +72,20 @@ func (h *Handler) extractMedia(w http.ResponseWriter, r *http.Request) {
 	for _, node := range candidates {
 		var result domain.NodeMediaExtractResponse
 		var err error
-		if req.Impersonate != "" {
+		if req.NetworkRouteID != "" {
+			if _, err = h.checkNetworkRoute(ctx, &node.ID, req.NetworkRouteID, domain.JobTypeYTDLP); err != nil {
+				h.badRequest(w, err.Error())
+				return
+			}
+			extractor, ok := h.nodeClient.(interface {
+				ExtractMediaWithRoute(context.Context, domain.Node, string, string, string) (domain.NodeMediaExtractResponse, error)
+			})
+			if !ok {
+				writeJSON(w, 501, map[string]string{"error": "Обновите роутер для выбора маршрута"})
+				return
+			}
+			result, err = extractor.ExtractMediaWithRoute(ctx, node, req.URL, req.Impersonate, req.NetworkRouteID)
+		} else if req.Impersonate != "" {
 			if err = h.checkMediaProfile(ctx, node, req.Impersonate); err != nil {
 				writeJSON(w, 409, map[string]string{"error": err.Error()})
 				return

@@ -20,6 +20,8 @@ export type StorageFileListing = {
 export type JobStatus = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'DONE' | 'ERROR' | 'CANCELED'
 
 export type Job = {
+  networkRouteId?: string
+  networkRouteLabel?: string
   id: string
   createdAt: string
   updatedAt: string
@@ -140,3 +142,6 @@ export type PlaylistMetadata = {
 }
 export type MediaVariant = { height: number; fps: number; quality: string; sizeBytes?: number; sizeEstimated?: boolean }
 export type MediaInfo = MediaVariant & { title?: string; durationSeconds?: number; variants: MediaVariant[] }
+
+export type NetworkRoute = { id: string; label: string; available: boolean; supportedTypes: string[]; scope: 'download' }
+export type NetworkRoutes = { enabled: boolean; canSelect: boolean; nodeId: string; planned: {state: 'configured' | 'automatic' | 'unknown'; routeId?: string; label: string; scope: 'download'}; routes: NetworkRoute[]; observed: {host: string; chains: string[]; rule: string; observedAt: string}[]; checkedAt: string; message?: string }

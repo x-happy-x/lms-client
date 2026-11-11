@@ -125,6 +125,10 @@ func (h *Handler) mediaDiagnose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Mode != "version" && req.Mode != "profiles" {
+		if _, err := h.checkNetworkRoute(ctx, &node.ID, req.NetworkRouteID, domain.JobTypeYTDLP); err != nil {
+			h.badRequest(w, err.Error())
+			return
+		}
 		if err := h.checkMediaProfile(ctx, node, req.Impersonate); err != nil {
 			writeJSON(w, 409, map[string]string{"error": err.Error()})
 			return

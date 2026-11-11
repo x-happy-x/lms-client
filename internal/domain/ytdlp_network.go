@@ -20,10 +20,11 @@ type NodeMediaCapabilities struct {
 	DiagnosticsSupported   bool     `json:"diagnosticsSupported"`
 }
 type NodeDiagnosticRequest struct {
-	Mode        string `json:"mode"`
-	URL         string `json:"url,omitempty"`
-	Impersonate string `json:"impersonate,omitempty"`
-	Verbose     bool   `json:"verbose,omitempty"`
+	NetworkRouteID string `json:"networkRouteId,omitempty"`
+	Mode           string `json:"mode"`
+	URL            string `json:"url,omitempty"`
+	Impersonate    string `json:"impersonate,omitempty"`
+	Verbose        bool   `json:"verbose,omitempty"`
 }
 type NodeDiagnosticResult struct {
 	Command        []string `json:"command"`

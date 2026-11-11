@@ -75,9 +75,11 @@ type Job struct {
 	OutputSizeBytes *int64
 	ErrorText       *string
 	// MaxSpeedBytes limits the node's download speed (bytes/s); nil = unlimited.
-	MaxSpeedBytes *int64
-	YtdlpOptions  *YtDlpOptions
-	Playlist      *JobPlaylist
+	MaxSpeedBytes     *int64
+	YtdlpOptions      *YtDlpOptions
+	NetworkRouteID    string
+	NetworkRouteLabel string
+	Playlist          *JobPlaylist
 }
 
 func (s JobStatus) IsTerminal() bool {

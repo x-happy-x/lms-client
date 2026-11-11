@@ -7,6 +7,7 @@ import (
 )
 
 type NodeJobCreateRequest struct {
+	NetworkRouteID   string        `json:"networkRouteId,omitempty"`
 	YtdlpOptions     *YtDlpOptions `json:"ytdlpOptions,omitempty"`
 	Type             string        `json:"type"`
 	URL              string        `json:"url"`
@@ -68,6 +69,7 @@ type NodeDownloadOption struct {
 }
 
 type NodeJobPreflightResponse struct {
+	NetworkRoutesSupported        bool                 `json:"networkRoutesSupported"`
 	ImpersonationOptionsSupported bool                 `json:"impersonationOptionsSupported"`
 	YtdlpOptionsSupported         bool                 `json:"ytdlpOptionsSupported"`
 	AdvancedOptionsSupported      bool                 `json:"advancedOptionsSupported"`

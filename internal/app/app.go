@@ -45,6 +45,17 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 			return nil, fmt.Errorf("invalid Account gateway credential length")
 		}
 	}
+	var homeNetToken string
+	if path := os.Getenv("ROUTERD_HOMENET_TOKEN_FILE"); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read HomeNet credential failed")
+		}
+		homeNetToken = strings.TrimSpace(string(data))
+		if len(homeNetToken) < 32 || len(homeNetToken) > 4096 {
+			return nil, fmt.Errorf("invalid HomeNet credential")
+		}
+	}
 	db, err := sqlite.Open(ctx, cfg.SQLite)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -73,6 +84,8 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	)
 	handler := httpapi.NewHandler(httpapi.Dependencies{
 		AccountOrigin:       os.Getenv("ROUTERD_ACCOUNT_ORIGIN"),
+		HomeNetOrigin:       os.Getenv("ROUTERD_HOMENET_ORIGIN"),
+		HomeNetToken:        homeNetToken,
 		AccountGatewayToken: gatewayToken,
 		PublicOrigin:        os.Getenv("ROUTERD_PUBLIC_ORIGIN"),
 		DB:                  db.SQL,
