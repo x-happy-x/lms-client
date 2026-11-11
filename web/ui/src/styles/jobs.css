@@ -121,21 +121,6 @@
 
 .row-actions { display: flex; align-items: center; gap: 4px; }
 
-.progress { height: 5px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
-.progress span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.6s ease; }
-.row.status-paused .progress span, .tile.status-paused .progress span { background: var(--warn); }
-.row.status-queued .progress span { background: var(--muted); }
-
-.progress.indeterminate span {
-  width: 30% !important;
-  animation: indeterminate 1.3s ease-in-out infinite;
-}
-
-@keyframes indeterminate {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(340%); }
-}
-
 @media (max-width: 640px) {
   .toolbar-row { flex-wrap: wrap; gap: 12px; }
   .toolbar-row > .segmented { width: 100%; padding: 3px; justify-content: space-between; }

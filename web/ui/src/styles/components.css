@@ -163,7 +163,8 @@
   right: 0;
   top: calc(100% + 4px);
   z-index: 40;
-  min-width: 230px;
+  min-width: min(230px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);

@@ -5,7 +5,6 @@ import {
   formatBytes,
   formatDate,
   formatDuration,
-  formatPercent,
   formatSpeed,
   titleFromJob,
   transfer,
@@ -16,6 +15,7 @@ import { Icon } from '../../ui/Icon'
 import { Menu, type MenuItem } from '../../ui/Menu'
 import { formatLimit } from '../../ui/SpeedLimitPicker'
 import { Thumb } from '../../ui/Thumb'
+import { TransferProgress } from '../../ui/TransferProgress'
 
 export type JobActions = {
   pause: (job: Job) => void
@@ -39,10 +39,6 @@ type JobItemProps = {
 
 const ACTIVE = ['QUEUED', 'RUNNING', 'PAUSED']
 
-function progressOf(job: Job): number {
-  if (job.status === 'DONE') return 100
-  return typeof job.percent === 'number' ? Math.max(0, Math.min(100, job.percent)) : 0
-}
 
 function details(job: Job, node?: NodeItem): string[] {
   const { done, total } = transfer(job)
@@ -116,7 +112,6 @@ function QuickActions({ job, actions }: { job: Job; actions: JobActions }) {
 
 export function JobItem({ job, node, actions, layout, label, thumbnail }: JobItemProps) {
   const title = label || titleFromJob(job)
-  const progress = progressOf(job)
   const kind = kindOfJob(job)
   const viewable = isViewableMedia(job)
   // Running jobs show live numbers instead; finished ones need no "Completed" line.
@@ -137,13 +132,12 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
         {thumb}
         <div className="tile-body">
           <strong className="title" title={title}>{title}</strong>
-          <div className="meta">
+          {!showProgress ? <div className="meta">
             <span className={`status-dot status-${job.status.toLowerCase()}`} />
             {STATUS_LABELS[job.status]}
-            {showProgress && job.percent != null ? ` · ${formatPercent(job.percent)}` : ''}
             {job.status === 'DONE' && job.outputSizeBytes ? ` · ${formatBytes(job.outputSizeBytes)}` : ''}
-          </div>
-          {showProgress ? <div className="progress"><span style={{ width: `${progress}%` }} /></div> : null}
+          </div> : null}
+          {showProgress ? <TransferProgress value={job.percent} status={job.status} ariaLabel={`Прогресс загрузки ${title}`} /> : null}
         </div>
         <div className="tile-actions">
           <QuickActions job={job} actions={actions} />
@@ -159,14 +153,9 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
       <div className="row-main">
         <div className="row-title">
           <strong className="title" title={job.url}>{title}</strong>
-          <span className={`badge status-${job.status.toLowerCase()}`}>{STATUS_LABELS[job.status]}</span>
-          {showProgress && job.percent != null ? <span className="percent">{formatPercent(job.percent)}</span> : null}
+          {!showProgress ? <span className={`badge status-${job.status.toLowerCase()}`}>{STATUS_LABELS[job.status]}</span> : null}
         </div>
-        {showProgress ? (
-          <div className={`progress${job.status === 'RUNNING' && job.percent == null ? ' indeterminate' : ''}`}>
-            <span style={{ width: `${progress}%` }} />
-          </div>
-        ) : null}
+        {showProgress ? <TransferProgress value={job.percent} status={job.status} ariaLabel={`Прогресс загрузки ${title}`} /> : null}
         <div className="meta">
           <span className="kind-label">{kindLabel(kind)}</span>
           {details(job, node).map((part) => (

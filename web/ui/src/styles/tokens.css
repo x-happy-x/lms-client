@@ -1,5 +1,7 @@
 :root {
   --bg: #f6f8fc;
+  --chrome: #eef1f6;
+  --canvas: #f9fbff;
   --surface: #ffffff;
   --surface-2: #f0f3f8;
   --surface-3: #e9eef6;
@@ -45,6 +47,8 @@
 
 :root[data-theme='dark'] {
   --bg: #10141c;
+  --chrome: #0d1118;
+  --canvas: #151b26;
   --surface: #181e29;
   --surface-2: #202838;
   --surface-3: #293346;
@@ -84,6 +88,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --bg: #10141c;
+  --chrome: #0d1118;
+  --canvas: #151b26;
     --surface: #181e29;
     --surface-2: #202838;
     --surface-3: #293346;

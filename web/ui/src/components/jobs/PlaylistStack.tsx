@@ -1,9 +1,10 @@
 import { useEffect, useId, useState } from 'react'
 import { api } from '../../api'
-import { formatBytes, formatPercent } from '../../lib/format'
+import { formatBytes } from '../../lib/format'
 import { playlistProgress } from '../../lib/playlists'
 import type { Job, MediaEntry, NodeItem } from '../../types'
 import { Icon } from '../../ui/Icon'
+import { TransferProgress } from '../../ui/TransferProgress'
 import { JobItem, type JobActions } from './JobItem'
 import { PlaylistMedia } from './PlaylistMedia'
 
@@ -27,20 +28,23 @@ export function PlaylistStack({ jobs, nodeById, actions, layout }: { jobs: Job[]
   }, [open, loaded, url, first.nodeId, retry])
   const completed = jobs.filter(job => job.status === 'DONE').length, failed = jobs.filter(job => job.status === 'ERROR').length
   const size = jobs.reduce((sum, job) => sum + (job.outputSizeBytes || job.totalBytes || 0), 0)
-  const total = count ?? (entries.length || jobs.length)
+  const total = count ?? (entries.length || undefined)
+  const covers = [...new Set([thumbnail, ...entries.map(entry => entry.thumbnail)].filter(Boolean))].slice(0, 3)
+  const state = jobs.some(job => job.status === 'RUNNING') ? 'RUNNING' : jobs.some(job => job.status === 'QUEUED') ? 'QUEUED' : jobs.some(job => job.status === 'PAUSED') ? 'PAUSED' : jobs.some(job => job.status === 'ERROR') ? 'ERROR' : jobs.every(job => job.status === 'DONE') ? 'DONE' : 'CANCELED'
+  const summary = whole ? 'Весь список · одно задание' : `Выбрано ${jobs.length} · готово ${completed}`
   return (
     <article className={`playlist-stack${open ? ' expanded' : ''} playlist-stack-${layout}`}>
       <button type="button" className="playlist-stack-heading" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-        <span className="playlist-stack-art"><span /><span /><span>{thumbnail ? <img src={thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Icon name="layers" size={29} />}</span><b>{total}</b></span>
-        <span className="playlist-stack-description"><strong>{title || 'Плейлист'}</strong><span className="playlist-stack-caption">{whole ? `${total} роликов · одна загрузка` : `${jobs.length} выбрано из ${total} · готово ${completed}`}{failed ? ` · ошибок ${failed}` : ''}{size > 0 ? ` · ${formatBytes(size)}` : ''}</span>{progress !== undefined ? <span className="playlist-stack-progress"><span style={{ width: `${progress}%` }} /></span> : null}</span>
-        <span className="playlist-stack-indicator">{progress !== undefined ? <span>{formatPercent(progress)}</span> : null}<Icon name="chevronDown" size={20} /></span>
+        <span className="playlist-stack-art" aria-hidden="true">{[2, 1, 0].map(index => <span className={`playlist-cover-layer cover-${index}`} key={index}><Icon name={index === 0 ? 'video' : 'layers'} size={index === 0 ? 28 : 22} />{covers[index] ? <img src={covers[index]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = 'none' }} /> : null}</span>)}</span>
+        <span className="playlist-stack-description"><span className="playlist-stack-eyebrow"><Icon name="layers" size={13} />Плейлист{total !== undefined ? <b>{total} роликов</b> : null}</span><strong>{title || 'Плейлист'}</strong><span className="playlist-stack-caption"><span>{summary}</span>{failed ? <span className="playlist-stack-failed">Ошибок: {failed}</span> : null}{size > 0 ? <span>{formatBytes(size)}</span> : null}</span><TransferProgress value={progress} status={state} label={whole ? 'Текущий ролик' : undefined} ariaLabel={`${whole ? 'Прогресс текущего ролика в плейлисте' : 'Прогресс выбранных роликов'} ${title || 'Плейлист'}`} /></span>
+        <span className="playlist-stack-indicator"><Icon name="chevronDown" size={19} /></span>
       </button>
       {open ? <div id={id} className="playlist-stack-content">
         {loading ? <p className="playlist-notice" role="status"><span className="spinner" />Получаем список роликов…</p> : null}
         {error ? <div className="playlist-notice error" role="status">{error}<button type="button" className="icon-btn" aria-label="Повторить получение плейлиста" onClick={() => setRetry(retry + 1)}><Icon name="retry" /></button></div> : null}
         {whole ? <>
           <JobItem job={first} node={first.nodeId ? nodeById.get(first.nodeId) : undefined} actions={actions} layout="row" />
-          <p className="muted small">Прогресс относится ко всему заданию. Отдельные статусы роликов источник не сообщает.</p>
+          <p className="muted small">Показан прогресс текущего ролика. Статусы отдельных роликов источник не сообщает.</p>
           <div className="playlist-preview-list">{entries.map((entry, index) => <PlaylistMedia key={entry.url} entry={entry} index={index + 1} nodeId={first.nodeId} maxHeight={first.ytdlpOptions?.maxHeight} />)}</div>
           {!loading && !error && !entries.length ? <p className="muted">Список роликов недоступен. Загрузкой можно управлять выше.</p> : null}
         </> : jobs.map(job => {
