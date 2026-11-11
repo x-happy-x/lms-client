@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { previewUrl } from '../api'
 import { isViewableMedia, kindOfJob } from '../lib/fileKinds'
 import type { Job } from '../types'
-import { KindIcon } from './Icon'
+import { Icon, KindIcon } from './Icon'
 
 /**
  * Preview image for finished photos/videos (made by the node); the file-type icon
@@ -20,7 +20,7 @@ export function Thumb({ job, size = 'sm' }: { job: Job; size?: 'sm' | 'lg' }) {
       ) : (
         <KindIcon kind={kind} size={size === 'lg' ? 36 : 22} />
       )}
-      {showImage && kind === 'video' ? <span className="thumb-play" aria-hidden="true">▶</span> : null}
+      {showImage && kind === 'video' ? <span className="thumb-play" aria-hidden="true"><Icon name="play" size={12} /></span> : null}
     </div>
   )
 }

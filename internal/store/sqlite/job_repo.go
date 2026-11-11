@@ -23,8 +23,8 @@ func (r *JobRepository) Create(ctx context.Context, job domain.Job) error {
 		INSERT INTO jobs (
 			id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		job.ID,
 		job.CreatedAt.UTC().Format(timeLayoutRFC3339()),
@@ -48,6 +48,7 @@ func (r *JobRepository) Create(ctx context.Context, job domain.Job) error {
 		job.ErrorText,
 		job.MaxSpeedBytes,
 		encodeYtdlpOptions(job.YtdlpOptions),
+		encodePlaylist(job.Playlist),
 	)
 	if err != nil {
 		return fmt.Errorf("insert job: %w", err)
@@ -59,7 +60,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id string) (domain.Job, err
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json
 		FROM jobs
 		WHERE id = ?
 	`, id)
@@ -78,7 +79,7 @@ func (r *JobRepository) List(ctx context.Context, activeOnly bool) ([]domain.Job
 	query := `
 		SELECT id, created_at, updated_at, type, url, profile_id, node_id,
 			storage_path, status, remote_job_id, percent, total_bytes, speed_bytes, eta_seconds,
-			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options
+			message, started_at, finished_at, output_path, output_size_bytes, error_text, max_speed_bytes, ytdlp_options, playlist_json
 		FROM jobs
 	`
 	args := make([]any, 0)
@@ -129,7 +130,8 @@ func (r *JobRepository) Update(ctx context.Context, job domain.Job) error {
 			output_size_bytes = ?,
 			error_text = ?,
 			max_speed_bytes = ?,
-			ytdlp_options = ?
+			ytdlp_options = ?,
+			playlist_json = ?
 		WHERE id = ?
 	`,
 		job.UpdatedAt.UTC().Format(timeLayoutRFC3339()),
@@ -152,6 +154,7 @@ func (r *JobRepository) Update(ctx context.Context, job domain.Job) error {
 		job.ErrorText,
 		job.MaxSpeedBytes,
 		encodeYtdlpOptions(job.YtdlpOptions),
+		encodePlaylist(job.Playlist),
 		job.ID,
 	)
 	if err != nil {
@@ -190,6 +193,7 @@ func scanJob(s scanner) (domain.Job, error) {
 		errorTextRaw                 sql.NullString
 		maxSpeedBytesRaw             sql.NullInt64
 		ytdlpOptionsRaw              sql.NullString
+		playlistRaw                  sql.NullString
 	)
 	if err := s.Scan(
 		&job.ID,
@@ -214,6 +218,7 @@ func scanJob(s scanner) (domain.Job, error) {
 		&errorTextRaw,
 		&maxSpeedBytesRaw,
 		&ytdlpOptionsRaw,
+		&playlistRaw,
 	); err != nil {
 		return domain.Job{}, fmt.Errorf("scan job: %w", err)
 	}
@@ -264,7 +269,22 @@ func scanJob(s scanner) (domain.Job, error) {
 		}
 	}
 
+	if playlistRaw.Valid {
+		if err := json.Unmarshal([]byte(playlistRaw.String), &job.Playlist); err != nil {
+			return domain.Job{}, fmt.Errorf("parse playlist: %w", err)
+		}
+	}
+
 	return job, nil
+}
+
+func encodePlaylist(playlist *domain.JobPlaylist) *string {
+	if playlist == nil {
+		return nil
+	}
+	data, _ := json.Marshal(playlist)
+	value := string(data)
+	return &value
 }
 
 func encodeYtdlpOptions(options *domain.YtDlpOptions) *string {

@@ -25,6 +25,8 @@ export type Job = {
   outputSizeBytes?: number
   errorText?: string
   maxSpeedBytes?: number
+  ytdlpOptions?: YtdlpOptions
+  playlist?: PlaylistMetadata
 }
 
 export type NodeStatus = 'online' | 'offline' | 'never_seen' | 'disabled' | 'unknown'
@@ -103,3 +105,22 @@ export type JobPreflightResponse = {
   bestNodeId?: string
   nodes: JobPreflightNode[]
 }
+
+
+export type YtdlpOptions = {
+  playlist?: boolean
+  maxHeight?: number
+  maxFps?: number
+  audioOnly?: boolean
+  container?: string
+  impersonate?: string
+}
+export type MediaEntry = { url: string; title?: string; thumbnail?: string; durationSeconds?: number }
+export type MediaExtractResult = MediaEntry & {
+  kind: 'video' | 'playlist'; entryCount?: number; entries: MediaEntry[]; truncated: boolean; nodeId: string; nodeName?: string
+}
+export type PlaylistMetadata = {
+  id: string; url: string; title?: string; thumbnail?: string; entryCount?: number; index?: number; entries?: MediaEntry[]
+}
+export type MediaVariant = { height: number; fps: number; quality: string; sizeBytes?: number; sizeEstimated?: boolean }
+export type MediaInfo = MediaVariant & { title?: string; durationSeconds?: number; variants: MediaVariant[] }

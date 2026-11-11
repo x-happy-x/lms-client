@@ -4,6 +4,7 @@ import { formatBytes, typeLabel } from '../../lib/format'
 import type { JobPreflightNode, JobPreflightResponse, Profile, StorageTarget } from '../../types'
 import { Dialog } from '../../ui/Dialog'
 import { Icon } from '../../ui/Icon'
+import { PlaylistInspector } from './PlaylistInspector'
 import { SpeedLimitPicker } from '../../ui/SpeedLimitPicker'
 
 type Props = {
@@ -33,7 +34,7 @@ const NODE_STATUS: Record<string, string> = {
 export function NewDownloadDialog(props: Props) {
   const { value, onChange, onClose, onSubmit, preflight, preflightLoading, preflightError, selectedNode } = props
   const types = selectedNode?.supportedTypes?.length ? selectedNode.supportedTypes : ['DIRECT', 'YTDLP', 'ARIA2C', 'TORRENT']
-  const canSubmit = value.url.trim() !== '' && value.nodeId !== '' && !props.submitting
+  const canSubmit = value.url.trim() !== '' && value.nodeId !== '' && !props.submitting && !value.mediaLoading && !(value.type === 'YTDLP' && value.media?.kind === 'playlist' && value.selectedEntries?.length === 0)
 
   return (
     <Dialog
@@ -177,6 +178,7 @@ export function NewDownloadDialog(props: Props) {
             ) : null}
           </>
         ) : null}
+        <PlaylistInspector value={value} onChange={onChange} />
         {props.submitError ? <div className="alert error">{props.submitError}</div> : null}
       </div>
     </Dialog>

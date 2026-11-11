@@ -1,16 +1,16 @@
 :root {
-  --bg: #f5f7fb;
+  --bg: #f6f8fc;
   --surface: #ffffff;
-  --surface-2: #f0f3f9;
-  --surface-3: #e7ecf5;
-  --border: #e1e6ef;
+  --surface-2: #f0f3f8;
+  --surface-3: #e9eef6;
+  --border: #e4e9f1;
   --border-strong: #cdd5e2;
-  --text: #111827;
+  --text: #182235;
   --text-2: #374151;
-  --muted: #6b7486;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: #e6eefe;
+  --muted: #68768c;
+  --accent: #3567e8;
+  --accent-hover: #2855d0;
+  --accent-soft: #eaf0ff;
   --accent-contrast: #ffffff;
   --good: #15803d;
   --good-soft: #e3f5e9;
@@ -21,17 +21,17 @@
   --info: #7c3aed;
   --info-soft: #efe8fe;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow: 0 2px 5px rgba(23, 38, 65, 0.025), 0 5px 18px rgba(23, 38, 65, 0.025);
   --shadow-lg: 0 20px 60px rgba(15, 23, 42, 0.18);
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 16px;
+  --radius-sm: 11px;
+  --radius: 15px;
+  --radius-lg: 20px;
 
   --k-video: #7c3aed;
   --k-audio: #db2777;
   --k-image: #0d9488;
   --k-archive: #d97706;
-  --k-document: #2563eb;
+  --k-document: #3567e8;
   --k-torrent: #16a34a;
   --k-disk: #475569;
   --k-app: #4f46e5;
@@ -44,15 +44,15 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: #0e1218;
-  --surface: #161b23;
-  --surface-2: #1c222c;
-  --surface-3: #242b37;
-  --border: #252c38;
+  --bg: #10141c;
+  --surface: #181e29;
+  --surface-2: #202838;
+  --surface-3: #293346;
+  --border: #2a3445;
   --border-strong: #343d4c;
   --text: #e8ebf1;
   --text-2: #c6ccd7;
-  --muted: #8d97a8;
+  --muted: #95a4bc;
   --accent: #5b9bff;
   --accent-hover: #7db0ff;
   --accent-soft: #1b2a44;
@@ -83,15 +83,15 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0e1218;
-    --surface: #161b23;
-    --surface-2: #1c222c;
-    --surface-3: #242b37;
-    --border: #252c38;
+    --bg: #10141c;
+    --surface: #181e29;
+    --surface-2: #202838;
+    --surface-3: #293346;
+    --border: #2a3445;
     --border-strong: #343d4c;
     --text: #e8ebf1;
     --text-2: #c6ccd7;
-    --muted: #8d97a8;
+    --muted: #95a4bc;
     --accent: #5b9bff;
     --accent-hover: #7db0ff;
     --accent-soft: #1b2a44;
