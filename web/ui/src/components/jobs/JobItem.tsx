@@ -33,6 +33,8 @@ type JobItemProps = {
   node?: NodeItem
   actions: JobActions
   layout: 'row' | 'tile'
+  label?: string
+  thumbnail?: string
 }
 
 const ACTIVE = ['QUEUED', 'RUNNING', 'PAUSED']
@@ -112,8 +114,8 @@ function QuickActions({ job, actions }: { job: Job; actions: JobActions }) {
   )
 }
 
-export function JobItem({ job, node, actions, layout }: JobItemProps) {
-  const title = titleFromJob(job)
+export function JobItem({ job, node, actions, layout, label, thumbnail }: JobItemProps) {
+  const title = label || titleFromJob(job)
   const progress = progressOf(job)
   const kind = kindOfJob(job)
   const viewable = isViewableMedia(job)
@@ -121,7 +123,7 @@ export function JobItem({ job, node, actions, layout }: JobItemProps) {
   const note = job.status === 'ERROR' ? job.errorText || job.message : job.status === 'RUNNING' || job.status === 'DONE' ? '' : job.message
   const showProgress = ACTIVE.includes(job.status)
 
-  const thumb = viewable ? (
+  const thumb = thumbnail && !viewable ? <div className="playlist-job-thumb"><img src={thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" /></div> : viewable ? (
     <button type="button" className="thumb-button" onClick={() => actions.open(job)} aria-label={`Открыть ${title}`}>
       <Thumb job={job} size={layout === 'tile' ? 'lg' : 'sm'} />
     </button>

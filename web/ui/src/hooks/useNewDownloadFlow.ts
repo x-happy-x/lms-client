@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
-import type { JobPreflightResponse, StorageTarget } from '../types'
+import type { JobPreflightResponse, StorageTarget, MediaExtractResult, YtdlpOptions, PlaylistMetadata } from '../types'
 
 export type NewJobFormState = {
   type: string
@@ -9,6 +9,13 @@ export type NewJobFormState = {
   nodeId: string
   profileId: string
   maxSpeedBytes: number | null
+  maxHeight: number
+  container: string
+  audioOnly: boolean
+  media?: MediaExtractResult
+  playlistId?: string
+  selectedEntries?: string[]
+  mediaLoading?: boolean
 }
 
 type UseNewDownloadFlowParams = {
@@ -22,7 +29,10 @@ const INITIAL_FORM: NewJobFormState = {
   storagePath: '',
   nodeId: '',
   profileId: '',
-  maxSpeedBytes: null
+  maxSpeedBytes: null,
+  maxHeight: 0,
+  container: 'auto',
+  audioOnly: false
 }
 
 function withOptional(value: string): string | undefined {
@@ -97,6 +107,9 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
     }
     if (next.nodeId !== value.nodeId) {
       setNodeSelectionTouched(true)
+    }
+    if (next.url !== value.url || next.nodeId !== value.nodeId || next.type !== value.type) {
+      next = { ...next, media: undefined, playlistId: undefined, selectedEntries: undefined, mediaLoading: false }
     }
     setValue(next)
   }
@@ -180,20 +193,46 @@ export function useNewDownloadFlow({ refreshJobs, setError }: UseNewDownloadFlow
     setSubmitting(true)
     setSubmitError('')
     try {
-      await api.createJob({
+      const options: YtdlpOptions = {
+        ...(value.maxHeight > 0 && !value.audioOnly ? { maxHeight: value.maxHeight } : {}),
+        ...(value.container !== 'auto' ? { container: value.container } : {}),
+        ...(value.audioOnly ? { audioOnly: true } : {})
+      }
+      const base = {
         type: value.type,
-        url: value.url.trim(),
         storagePath: withOptional(value.storagePath),
         nodeId: withOptional(value.nodeId),
         profileId: withOptional(value.profileId),
         maxSpeedBytes: value.maxSpeedBytes ?? undefined,
         startImmediately
-      })
+      }
+      const found = value.type === 'YTDLP' ? value.media : undefined
+      if (found?.kind === 'playlist') {
+        const playlist: PlaylistMetadata = {
+          id: value.playlistId || crypto.randomUUID(), url: found.url, title: found.title,
+          thumbnail: found.thumbnail || found.entries.find(entry => entry.thumbnail)?.thumbnail,
+          entryCount: found.entryCount ?? found.entries.length
+        }
+        if (value.selectedEntries === undefined) {
+          await api.createJob({ ...base, url: found.url, ytdlpOptions: { ...options, playlist: true }, playlist: { ...playlist, entries: found.entries.slice(0, 300) } })
+        } else {
+          const selected = new Set(value.selectedEntries)
+          const chosen = found.entries.map((entry, index) => ({ entry, index })).filter(({ entry }) => selected.has(entry.url))
+          if (!chosen.length) throw new Error('Выберите хотя бы один ролик')
+          for (const { entry, index } of chosen) {
+            await api.createJob({ ...base, url: entry.url, ytdlpOptions: { ...options, playlist: false }, playlist: { ...playlist, index: index + 1 } })
+            setValue(current => ({ ...current, selectedEntries: current.selectedEntries?.filter(url => url !== entry.url) }))
+          }
+        }
+      } else {
+        await api.createJob({ ...base, url: value.url.trim(), ...(value.type === 'YTDLP' ? { ytdlpOptions: { ...options, playlist: false } } : {}) })
+      }
       closeModal()
       setError('')
       await refreshJobs()
     } catch (err) {
       setSubmitError((err as Error).message)
+      await refreshJobs()
     } finally {
       setSubmitting(false)
     }
