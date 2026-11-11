@@ -26,4 +26,6 @@
 .job-network-route[open] summary > svg:last-child { transform:rotate(90deg); }
 .job-network-body { margin-top:8px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); overflow-wrap:anywhere; line-height:1.6; }
 .job-network-body p { margin:4px 0; }
+.job-network-change { margin-top:14px; display:grid; grid-template-columns:minmax(140px,1fr) auto; gap:8px; align-items:end; }
+.job-network-change > p { grid-column:1/-1; }
 @media(max-width:600px) { .network-controls { grid-template-columns:1fr; } .network-summary { align-items:flex-start; flex-wrap:wrap; } .network-page { gap:16px; } .network-observed,.network-selector { padding:16px; } }

@@ -476,6 +476,19 @@ func (h *Handler) jobsByID(w http.ResponseWriter, r *http.Request) {
 		h.streamJobOutput(w, r, jobID, preview)
 		return
 	}
+	if strings.HasSuffix(rest, "/network") {
+		if r.Method != http.MethodPost {
+			h.methodNotAllowed(w)
+			return
+		}
+		jobID := strings.TrimSuffix(strings.TrimSuffix(rest, "/network"), "/")
+		if jobID == "" || strings.Contains(jobID, "/") {
+			h.notFound(w)
+			return
+		}
+		h.setJobNetworkRoute(w, r, jobID)
+		return
+	}
 	if strings.HasSuffix(rest, "/speed") {
 		if r.Method != http.MethodPost {
 			h.methodNotAllowed(w)

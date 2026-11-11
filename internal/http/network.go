@@ -154,3 +154,42 @@ func (h *Handler) homeNetEgress(ctx context.Context, node, host string) (domain.
 	err = json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&out)
 	return out, err
 }
+
+func (h *Handler) setJobNetworkRoute(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		NetworkRouteID string `json:"networkRouteId"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
+	if h.jobRepo == nil {
+		h.internalError(w, "job repository unavailable")
+		return
+	}
+	job, err := h.jobRepo.GetByID(r.Context(), id)
+	if err != nil {
+		h.notFound(w)
+		return
+	}
+	label, err := h.checkNetworkRoute(r.Context(), job.NodeID, req.NetworkRouteID, job.Type)
+	if err != nil {
+		h.badRequest(w, err.Error())
+		return
+	}
+	controller, ok := h.jobController.(interface {
+		SetJobNetworkRoute(context.Context, string, string, string) (domain.Job, error)
+	})
+	if !ok {
+		writeJSON(w, 501, map[string]string{"error": "Обновите роутер для смены маршрута"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+	result, err := controller.SetJobNetworkRoute(ctx, id, req.NetworkRouteID, label)
+	if err != nil {
+		writeJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, toJobResponse(result))
+}
