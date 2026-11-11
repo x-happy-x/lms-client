@@ -509,6 +509,22 @@ func (h *Handler) nodesByID(w http.ResponseWriter, r *http.Request) {
 		h.notFound(w)
 		return
 	}
+	for _, suffix := range []string{"/files/content", "/files"} {
+		if strings.HasSuffix(rest, suffix) {
+			id := strings.TrimSuffix(rest, suffix)
+			if id == "" || strings.Contains(id, "/") {
+				h.notFound(w)
+				return
+			}
+			h.nodeFiles(w, r, id, suffix == "/files/content")
+			return
+		}
+	}
+	if fileMutationPath(r.URL.Path) {
+		parts := strings.Split(rest, "/")
+		h.nodeFileMutation(w, r, parts[0], parts[2])
+		return
+	}
 
 	if strings.HasSuffix(rest, "/storage/targets") {
 		if r.Method != http.MethodGet {
