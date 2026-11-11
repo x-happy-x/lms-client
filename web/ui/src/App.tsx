@@ -16,12 +16,13 @@ import { useRouterData } from './hooks/useRouterData'
 import { isViewableMedia } from './lib/fileKinds'
 import type { Job, TabKey } from './types'
 import { Icon, type IconName } from './ui/Icon'
+import { Dialog } from './ui/Dialog'
 
 // desktopOnly: browser extensions are a desktop thing, so the phone bottom bar skips them.
-const TABS: Array<{ key: TabKey; label: string; icon: IconName; desktopOnly?: boolean }> = [
-  { key: 'jobs', label: 'Загрузки', icon: 'download' },
-  { key: 'media', label: 'Медиа', icon: 'image' },
-  { key: 'nodes', label: 'Ноды', icon: 'server' },
+const TABS: Array<{ key: TabKey; label: string; icon: IconName; desktopOnly?: boolean; primary?: boolean }> = [
+  { key: 'jobs', label: 'Загрузки', icon: 'download', primary: true },
+  { key: 'media', label: 'Медиа', icon: 'image', primary: true },
+  { key: 'nodes', label: 'Ноды', icon: 'server', primary: true },
   { key: 'profiles', label: 'Профили', icon: 'profile' },
   { key: 'extension', label: 'Расширение', icon: 'puzzle', desktopOnly: true },
   { key: 'settings', label: 'Настройки', icon: 'settings' }
@@ -33,6 +34,7 @@ type JobDialog = { kind: 'url' | 'move' | 'speed'; job: Job } | null
 export default function App() {
   const [tab, setTab] = useState<TabKey>('jobs')
   const [error, setError] = useState('')
+  const [moreOpen, setMoreOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [viewer, setViewer] = useState<Viewer>(null)
   const [dialog, setDialog] = useState<JobDialog>(null)
@@ -86,22 +88,31 @@ export default function App() {
   const active = jobs.filter((job) => job.status === 'RUNNING' || job.status === 'QUEUED').length
   const online = nodes.filter((node) => node.status === 'online').length
   const current = TABS.find((item) => item.key === tab)!
+  const navigate = (next: TabKey) => { setTab(next); setMoreOpen(false) }
+  const nextTheme = prefs.theme === 'system' ? 'light' : prefs.theme === 'light' ? 'dark' : 'system'
+  const themeLabel = prefs.theme === 'system' ? 'Системная тема' : prefs.theme === 'light' ? 'Светлая тема' : 'Тёмная тема'
+  const descriptions: Partial<Record<TabKey, string>> = {
+    jobs: 'Файлы, видео и плейлисты', media: 'Готовые фото и видео', nodes: 'Устройства и хранилища',
+    profiles: 'Параметры ваших загрузок', extension: 'Сохраняйте прямо из браузера', settings: 'Настройте LMS под себя'
+  }
 
   return (
     <div className="shell">
+      <a className="skip-link" href="#main-content">Перейти к содержимому</a>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark"><Icon name="download" size={18} /></span>
           <span>
             <strong>LMS</strong>
-            <span className="muted small">загрузки</span>
+            <span className="muted small">ваше пространство</span>
           </span>
         </div>
-        <nav className="nav">
+        <div className="nav-caption">Библиотека</div>
+        <nav className="nav" aria-label="Основная навигация">
           {TABS.map((item) => (
-            <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)}>
+            <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} aria-current={tab === item.key ? 'page' : undefined} title={item.label} onClick={() => navigate(item.key)}>
               <Icon name={item.icon} />
-              <span>{item.label}</span>
+              <span className="nav-label">{item.label}</span>
               {item.key === 'jobs' && active > 0 ? <span className="count">{active}</span> : null}
             </button>
           ))}
@@ -117,11 +128,11 @@ export default function App() {
 
       <div className="main">
         <header className="topbar">
-          <h1>{current.label}</h1>
+          <div className="page-heading"><h1>{current.label}</h1><p>{descriptions[tab]}</p></div>
           {tab === 'jobs' || tab === 'media' ? (
             <label className="search">
               <Icon name="search" size={18} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск по имени и ссылке" aria-label="Поиск" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти в библиотеке" aria-label="Поиск" />
               {search ? (
                 <button type="button" className="icon-btn small" onClick={() => setSearch('')} aria-label="Очистить">
                   <Icon name="close" size={16} />
@@ -131,16 +142,21 @@ export default function App() {
           ) : (
             <span className="spacer" />
           )}
+          <button className="icon-btn theme-toggle" type="button" title={`${themeLabel}. Переключить тему`} aria-label={`${themeLabel}. Переключить тему`} onClick={() => setTheme(nextTheme)}>
+            <Icon name={prefs.theme === 'system' ? 'monitor' : prefs.theme === 'light' ? 'sun' : 'moon'} size={19} />
+          </button>
           <button
             type="button"
             className="btn primary add-btn"
+            aria-label="Новая загрузка"
+            title="Новая загрузка"
             onClick={() => {
               setTab('jobs')
               void newDownload.openModal()
             }}
           >
             <Icon name="plus" size={18} />
-            <span>Загрузка</span>
+            <span>Добавить</span>
           </button>
         </header>
 
@@ -154,7 +170,7 @@ export default function App() {
         ) : null}
         {health === 'offline' ? <div className="alert warn banner">Роутер не отвечает — данные могут быть устаревшими.</div> : null}
 
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1}>
           {tab === 'jobs' ? (
             <JobsPage
               jobs={jobs}
@@ -176,14 +192,29 @@ export default function App() {
         </main>
       </div>
 
-      <nav className="bottom-nav">
-        {TABS.filter((item) => !item.desktopOnly).map((item) => (
-          <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)}>
-            <Icon name={item.icon} />
+      <nav className="bottom-nav" aria-label="Основная навигация на телефоне">
+        {TABS.filter((item) => item.primary).map((item) => (
+          <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} aria-current={tab === item.key ? 'page' : undefined} onClick={() => navigate(item.key)}>
+            <span className="bottom-icon"><Icon name={item.icon} /></span>
             <span>{item.label}</span>
           </button>
         ))}
+        <button type="button" className={!current.primary ? 'active' : ''} aria-label="Ещё разделы" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={() => setMoreOpen(true)}>
+          <span className="bottom-icon"><Icon name="grid" /></span><span>Ещё</span>
+        </button>
       </nav>
+      {moreOpen ? (
+        <Dialog title="Ваше пространство" subtitle="Все разделы LMS" onClose={() => setMoreOpen(false)}>
+          <div className="more-destinations">
+            {TABS.filter((item) => !item.desktopOnly).map((item) => (
+              <button key={item.key} type="button" className={tab === item.key ? 'active' : ''} onClick={() => navigate(item.key)}>
+                <span><Icon name={item.icon} /></span><strong>{item.label}</strong><Icon name="chevronRight" size={17} />
+              </button>
+            ))}
+          </div>
+          <p className="more-status muted"><span className={`status-dot ${online > 0 ? 'node-online' : 'node-offline'}`} /> Нод в сети: {online} из {nodes.length}<span>v{version}</span></p>
+        </Dialog>
+      ) : null}
 
       {newDownload.open ? (
         <NewDownloadDialog

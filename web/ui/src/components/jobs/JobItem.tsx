@@ -133,7 +133,7 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
 
   if (layout === 'tile') {
     return (
-      <article className={`tile status-${job.status.toLowerCase()}`}>
+      <article className={`tile kind-${kind} status-${job.status.toLowerCase()}`}>
         {thumb}
         <div className="tile-body">
           <strong className="title" title={title}>{title}</strong>
@@ -154,7 +154,7 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
   }
 
   return (
-    <article className={`row status-${job.status.toLowerCase()}`}>
+    <article className={`row kind-${kind} status-${job.status.toLowerCase()}`}>
       {thumb}
       <div className="row-main">
         <div className="row-title">
@@ -170,7 +170,7 @@ export function JobItem({ job, node, actions, layout, label, thumbnail }: JobIte
         <div className="meta">
           <span className="kind-label">{kindLabel(kind)}</span>
           {details(job, node).map((part) => (
-            <span key={part}>{part}</span>
+            <span key={part} className={part === formatDate(job.finishedAt ?? job.createdAt) ? 'meta-date' : undefined}>{part}</span>
           ))}
         </div>
         {note ? <div className={`note${job.status === 'ERROR' ? ' error' : ''}`}>{note}</div> : null}
